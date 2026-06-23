@@ -23,11 +23,22 @@ export type Resp =
   | { ok: true; kind: 'RECORD_CORRECTIONS' }
   | { ok: false; code: string; message: string };
 
-/** Send a typed message to the service worker and await its typed reply. */
+/** Send a typed message to the service worker and await its typed reply.
+ *  Handles the common "extension was reloaded while this page stayed open"
+ *  case with a clear, actionable message. */
 export async function sendToBackground(msg: Msg): Promise<Resp> {
+  // If the extension was reloaded/updated, this stale content script loses its
+  // runtime context. chrome.runtime.id becomes undefined.
+  if (!chrome.runtime?.id) {
+    return { ok: false, code: 'CONTEXT_INVALIDATED', message: 'Autofy was updated — reload this page (F5) and try again.' };
+  }
   try {
     return (await chrome.runtime.sendMessage(msg)) as Resp;
   } catch (err) {
-    return { ok: false, code: 'CHANNEL', message: String(err) };
+    const m = String(err);
+    if (m.includes('context invalidated') || m.includes('Receiving end does not exist')) {
+      return { ok: false, code: 'CONTEXT_INVALIDATED', message: 'Autofy was updated — reload this page (F5) and try again.' };
+    }
+    return { ok: false, code: 'CHANNEL', message: m };
   }
 }
