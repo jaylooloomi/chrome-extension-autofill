@@ -47,7 +47,8 @@ if (!(window as unknown as { __autofy?: boolean }).__autofy) {
 
     const results = fillFields(resp.map, resolve);
     const ctx: ReviewContext = { domain: location.hostname, formSignature };
-    ui.showReview(fields, results, resp.map, ctx, resolve);
-    if (resp.fromCache) ui.toast('Filled from cache (no AI call).');
+    ui.showReview(fields, results, resp.map, ctx, resolve, resp.fake);
+    if (resp.fake) ui.toast('No profile set — filled with sample data. Review before submitting.');
+    else if (resp.fromCache) ui.toast('Filled from cache (no AI call).');
   }
 }

@@ -69,6 +69,7 @@ export interface UIController {
     map: MappingResponse,
     ctx: ReviewContext,
     resolve: (ref: string) => Element | undefined,
+    fake?: boolean,
   ): void;
 }
 
@@ -119,14 +120,17 @@ export function mountUI(handlers: UIHandlers): UIController {
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4000);
     },
-    showReview(fields, results, map, ctx, resolve) {
+    showReview(fields, results, map, ctx, resolve, fake = false) {
       const status = new Map(results.map((r) => [r.ref, r]));
       panel.innerHTML = '';
 
       const head = document.createElement('div');
       head.className = 'head';
       const filledCount = results.filter((r) => r.status === 'filled').length;
-      head.innerHTML = `<span>Review &amp; submit<br><span class="sub">${filledCount}/${fields.length} filled · nothing is sent automatically</span></span>`;
+      const sub = fake
+        ? `⚠ SAMPLE DATA (no profile set) · ${filledCount}/${fields.length} filled · review before submitting`
+        : `${filledCount}/${fields.length} filled · nothing is sent automatically`;
+      head.innerHTML = `<span>Review &amp; submit<br><span class="sub">${sub}</span></span>`;
       panel.appendChild(head);
 
       const rows = document.createElement('div');

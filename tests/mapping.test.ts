@@ -20,6 +20,20 @@ describe('mapping', () => {
     expect(prompt).toContain('a@b.com');
   });
 
+  it('asks for consistent sample data in fake mode (no nulls)', () => {
+    const prompt = buildMappingPrompt({ fields, profile: {} }, true);
+    expect(prompt).toContain('SAMPLE');
+    expect(prompt).toContain('Do NOT return null');
+    expect(prompt).not.toContain('Never invent data');
+  });
+
+  it('passes the fake prompt through mapFields when opts.fake is set', async () => {
+    const complete = vi.fn().mockResolvedValue({ field_0: 'a@b.com', field_1: 'Sam' });
+    await mapFields({ fields, profile: {} }, provider(complete), { fake: true });
+    const sentPrompt = (complete.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(sentPrompt).toContain('SAMPLE');
+  });
+
   it('coerces a raw response and fills every ref', () => {
     const map = validateMapping({ field_0: 'a@b.com', field_1: 42 }, fields);
     expect(map).toEqual({ field_0: 'a@b.com', field_1: '42' });

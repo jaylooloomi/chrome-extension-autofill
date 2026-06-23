@@ -5,6 +5,7 @@ import type { Msg, Resp } from '../shared/messages';
 import { LLMError } from '../shared/types';
 import type { ApiConfig } from '../shared/types';
 import { getApiConfig, getProfile } from '../shared/storage';
+import { listProfilePaths } from '../shared/profile-schema';
 import { createProvider } from './llm/provider';
 import { mapFields } from './mapping';
 import { parseResume } from './resume';
@@ -34,20 +35,28 @@ async function handleMapFields(
   const profile = await getProfile();
   const domain = domainOf(msg.url);
 
-  const cached = await getCachedMapping(domain, msg.formSignature, msg.fields, profile);
-  if (cached && cached.coverage >= MIN_COVERAGE) {
-    return { ok: true, kind: 'MAP_FIELDS', map: cached.map, fromCache: true };
+  // No profile at all -> generate plausible sample data instead of leaving
+  // everything blank (fake-data mode). Skip the cache in this mode.
+  const fake = listProfilePaths(profile).length === 0;
+
+  if (!fake) {
+    const cached = await getCachedMapping(domain, msg.formSignature, msg.fields, profile);
+    if (cached && cached.coverage >= MIN_COVERAGE) {
+      return { ok: true, kind: 'MAP_FIELDS', map: cached.map, fromCache: true, fake: false };
+    }
   }
 
   const provider = createProvider(config);
-  const map = await mapFields({ fields: msg.fields, profile }, provider);
-  // Learn the site mapping for next time (best-effort).
-  try {
-    await learn(domain, msg.formSignature, toSignatureValues(msg.fields, map), profile);
-  } catch {
-    /* learning is non-critical */
+  const map = await mapFields({ fields: msg.fields, profile }, provider, { fake });
+  if (!fake) {
+    // Learn the site mapping for next time (best-effort).
+    try {
+      await learn(domain, msg.formSignature, toSignatureValues(msg.fields, map), profile);
+    } catch {
+      /* learning is non-critical */
+    }
   }
-  return { ok: true, kind: 'MAP_FIELDS', map, fromCache: false };
+  return { ok: true, kind: 'MAP_FIELDS', map, fromCache: false, fake };
 }
 
 async function handleParseResume(

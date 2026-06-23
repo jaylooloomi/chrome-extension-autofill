@@ -11,7 +11,26 @@ const FEW_SHOT = `Examples (job application context):
 - A <select> "Country" -> choose the option text matching the profile country.
 - "Are you authorized to work?" -> use job.workAuthorization if present, else null.`;
 
-export function buildMappingPrompt(req: MappingRequest): string {
+/** Build the mapping prompt. When `fake` is true (the user has no profile),
+ *  ask for realistic, internally-consistent sample data instead of nulls. */
+export function buildMappingPrompt(req: MappingRequest, fake = false): string {
+  if (fake) {
+    return [
+      'Generate realistic SAMPLE form data for autofill testing.',
+      'You are given FIELDS (each with a "ref"). The user has NO profile, so',
+      'invent data for ONE plausible, internally-consistent fictional job applicant.',
+      'Rules:',
+      '- Fill EVERY field with a sensible value matching its type, label, and options.',
+      '- Keep values consistent (same person: name, an email derived from that name, a',
+      '  matching phone, address, etc.).',
+      '- For <select>/radio fields, return one of the provided option TEXT or value.',
+      '- For checkboxes, return "true" or "false".',
+      '- Use realistic but clearly fictional data. Do NOT return null — fill everything.',
+      '- Output strictly: { "field_0": "value", ... }. No prose.',
+      '',
+      `FIELDS:\n${JSON.stringify(req.fields, null, 0)}`,
+    ].join('\n');
+  }
   return [
     'You map web form fields to a user profile for autofill.',
     'You are given FIELDS (each with a "ref") and a PROFILE (JSON).',
@@ -48,13 +67,15 @@ export function validateMapping(raw: unknown, fields: FieldSchema[]): MappingRes
   return out;
 }
 
-/** Run a mapping request through a provider, retrying once on a parse failure. */
+/** Run a mapping request through a provider, retrying once on a parse failure.
+ *  Pass `fake: true` to generate sample data when the user has no profile. */
 export async function mapFields(
   req: MappingRequest,
   provider: LLMProvider,
-  signal?: AbortSignal,
+  opts: { fake?: boolean; signal?: AbortSignal } = {},
 ): Promise<MappingResponse> {
-  const prompt = buildMappingPrompt(req);
+  const { fake = false, signal } = opts;
+  const prompt = buildMappingPrompt(req, fake);
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {

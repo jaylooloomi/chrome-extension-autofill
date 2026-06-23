@@ -18,7 +18,7 @@ export type Msg =
     };
 
 export type Resp =
-  | { ok: true; kind: 'MAP_FIELDS'; map: MappingResponse; fromCache: boolean }
+  | { ok: true; kind: 'MAP_FIELDS'; map: MappingResponse; fromCache: boolean; fake: boolean }
   | { ok: true; kind: 'PARSE_RESUME'; profile: Profile }
   | { ok: true; kind: 'RECORD_CORRECTIONS' }
   | { ok: false; code: string; message: string };
