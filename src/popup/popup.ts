@@ -11,10 +11,10 @@ document.getElementById('open-options')!.addEventListener('click', () => {
 
 async function refresh(): Promise<void> {
   const [config, profile] = await Promise.all([getApiConfig(), getProfile()]);
-  const hasKey = Boolean(config?.apiKey);
+  const ready = Boolean(config?.apiKey) || config?.provider === 'ollama';
   const fieldCount = listProfilePaths(profile).length;
 
-  if (!hasKey) {
+  if (!ready) {
     stateEl.textContent = 'Add your API key in settings to start.';
     stateEl.className = 'state warn';
   } else if (fieldCount === 0) {

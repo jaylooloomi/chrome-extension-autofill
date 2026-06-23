@@ -5,6 +5,7 @@ import { LLMError } from '../../shared/types';
 import { OpenAIProvider } from './openai';
 import { GeminiProvider } from './gemini';
 import { AnthropicProvider } from './anthropic';
+import { OllamaProvider } from './ollama';
 
 export function createProvider(config: ApiConfig): LLMProvider {
   switch (config.provider) {
@@ -14,6 +15,8 @@ export function createProvider(config: ApiConfig): LLMProvider {
       return new GeminiProvider(config);
     case 'anthropic':
       return new AnthropicProvider(config);
+    case 'ollama':
+      return new OllamaProvider(config);
     default:
       throw new LLMError('CONFIG', `unknown provider: ${String(config.provider)}`);
   }

@@ -13,17 +13,38 @@ import {
 import { sendToBackground } from '../shared/messages';
 import { SCALAR_FIELDS, getByPath, setByPath } from '../shared/profile-schema';
 
+const OLLAMA_DEFAULT_ENDPOINT = 'http://localhost:11434/v1';
+
 const SUGGESTED_MODEL: Record<ProviderName, string> = {
   gemini: 'gemini-1.5-flash',
   openai: 'gpt-4o-mini',
   anthropic: 'claude-3-5-haiku-latest',
+  ollama: 'minimax-m2.5:cloud',
 };
 
 const KEY_HELP: Record<ProviderName, string> = {
   gemini: 'https://aistudio.google.com/app/apikey',
   openai: 'https://platform.openai.com/api-keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
+  ollama: 'https://docs.ollama.com/cloud',
 };
+
+const PROVIDER_NOTE: Record<ProviderName, string> = {
+  gemini: '',
+  openai: '',
+  anthropic: '',
+  ollama:
+    'Fill in your Ollama URL (default http://localhost:11434/v1). API key can be ' +
+    'left blank for the local daemon. For cloud models (e.g. minimax-m2.5:cloud) ' +
+    'run `ollama signin` first. IMPORTANT: let the extension reach Ollama by ' +
+    'setting OLLAMA_ORIGINS=* and restarting Ollama, otherwise the request is ' +
+    'blocked by CORS.',
+};
+
+/** Providers whose key may be empty (local daemon). */
+function keyOptional(provider: ProviderName): boolean {
+  return provider === 'ollama';
+}
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -81,8 +102,15 @@ function mergeProfile(base: Profile, draft: Profile): Profile {
   };
 }
 
-function updateKeyHelp(provider: ProviderName): void {
+function applyProviderUI(provider: ProviderName): void {
   ($('key-help') as HTMLAnchorElement).href = KEY_HELP[provider];
+  $('provider-note').textContent = PROVIDER_NOTE[provider];
+  ($('key-optional') as HTMLElement).hidden = !keyOptional(provider);
+  // Prefill the Ollama URL the first time it is selected.
+  const endpoint = $('endpoint') as HTMLInputElement;
+  if (provider === 'ollama' && !endpoint.value.trim()) {
+    endpoint.value = OLLAMA_DEFAULT_ENDPOINT;
+  }
 }
 
 async function init(): Promise<void> {
@@ -98,11 +126,11 @@ async function init(): Promise<void> {
   } else {
     modelInput.value = SUGGESTED_MODEL.gemini;
   }
-  updateKeyHelp(providerSel.value as ProviderName);
+  applyProviderUI(providerSel.value as ProviderName);
 
   providerSel.addEventListener('change', () => {
     const p = providerSel.value as ProviderName;
-    updateKeyHelp(p);
+    applyProviderUI(p);
     if (!modelInput.value.trim()) modelInput.value = SUGGESTED_MODEL[p];
   });
 
@@ -113,7 +141,7 @@ async function init(): Promise<void> {
       apiKey: ($('apiKey') as HTMLInputElement).value.trim(),
       endpoint: ($('endpoint') as HTMLInputElement).value.trim() || undefined,
     };
-    if (!next.apiKey) {
+    if (!next.apiKey && !keyOptional(next.provider)) {
       status($('api-status'), 'Please paste an API key.', false);
       return;
     }

@@ -95,7 +95,7 @@ export interface SiteCacheEntry {
   updatedAt: number;
 }
 
-export type ProviderName = 'openai' | 'gemini' | 'anthropic';
+export type ProviderName = 'openai' | 'gemini' | 'anthropic' | 'ollama';
 
 export interface ApiConfig {
   provider: ProviderName;

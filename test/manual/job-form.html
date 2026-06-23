@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Autofy test — Job application</title>
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; background: #f6f7fb; color: #111; margin: 0; }
+      .wrap { max-width: 640px; margin: 0 auto; padding: 32px 20px 120px; }
+      h1 { color: #4f46e5; }
+      fieldset { border: 1px solid #e5e7eb; border-radius: 12px; margin: 18px 0; padding: 16px 18px; background: #fff; }
+      legend { font-weight: 700; padding: 0 6px; }
+      label { display: block; margin: 12px 0 4px; font-size: 13px; color: #444; }
+      input, select, textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 8px; font: 15px system-ui; }
+      .radio label, .check label { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; font-size: 15px; color: #111; }
+      .radio input, .check input { width: auto; }
+      .note { font-size: 12px; color: #6b7280; }
+      .bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e5e7eb; padding: 12px; text-align: center; }
+      button { background: #4f46e5; color: #fff; border: none; padding: 10px 22px; border-radius: 8px; font: 600 15px system-ui; cursor: pointer; }
+      #result { margin-top: 8px; font-size: 13px; color: #166534; min-height: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Job application (Autofy test)</h1>
+      <p class="note">Click the floating <b>Fill</b> button (bottom-right) to autofill. This form never submits on its own.</p>
+
+      <form id="app">
+        <fieldset>
+          <legend>Personal information</legend>
+          <label for="fn">First name</label>
+          <input id="fn" name="first_name" type="text" required />
+          <label for="ln">Last name</label>
+          <input id="ln" name="last_name" type="text" />
+          <label for="em">Email address</label>
+          <input id="em" name="applicant_email" type="email" placeholder="you@example.com" />
+          <!-- label only via aria-label, to test detection fallback -->
+          <input name="phone_number" type="tel" aria-label="Phone number" />
+        </fieldset>
+
+        <fieldset>
+          <legend>Address</legend>
+          <label for="a1">Street address</label>
+          <input id="a1" name="address_line_1" type="text" />
+          <label for="city">City</label>
+          <input id="city" name="city" type="text" />
+          <label for="co">Country</label>
+          <select id="co" name="country">
+            <option value="">Select…</option>
+            <option value="US">United States</option>
+            <option value="CA">Canada</option>
+            <option value="TW">Taiwan</option>
+            <option value="GB">United Kingdom</option>
+          </select>
+        </fieldset>
+
+        <fieldset>
+          <legend>Role details</legend>
+          <label for="li">LinkedIn URL</label>
+          <input id="li" name="linkedin" type="url" />
+          <label for="sal">Expected salary</label>
+          <input id="sal" name="expected_salary" type="text" />
+          <label for="from">Available from</label>
+          <input id="from" name="available_from" type="date" />
+
+          <div class="radio">
+            <label style="display:block;margin-bottom:6px;color:#444;font-size:13px">Are you authorized to work?</label>
+            <label><input type="radio" name="work_auth" value="yes" /> Yes</label>
+            <label><input type="radio" name="work_auth" value="no" /> No</label>
+          </div>
+
+          <label for="cl">Cover letter</label>
+          <textarea id="cl" name="cover_letter" rows="4"></textarea>
+
+          <!-- A React-style controlled input: naive el.value = x gets reverted.
+               Only a native-setter + input event (what Autofy does) sticks. -->
+          <label for="ctrl">Headline (controlled input — tests the fill engine)</label>
+          <input id="ctrl" name="headline" type="text" />
+
+          <div class="check">
+            <label><input type="checkbox" name="subscribe" /> Email me about similar jobs</label>
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="bar">
+        <button id="submit">Submit application</button>
+        <div id="result"></div>
+      </div>
+    </div>
+
+    <script>
+      // Simulate a framework-controlled input: revert any plain `.value` write
+      // that didn't go through the native setter + 'input' event.
+      (function () {
+        const el = document.getElementById('ctrl');
+        let model = '';
+        el.addEventListener('input', (e) => { model = e.target.value; });
+        // Periodically force the DOM back to the "model" — like React re-render.
+        setInterval(() => { if (el.value !== model) el.value = model; }, 200);
+      })();
+
+      // Prove nothing auto-submits: only a real click does, and we just report.
+      document.getElementById('submit').addEventListener('click', (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(document.getElementById('app')));
+        document.getElementById('result').textContent =
+          'Submitted manually with: ' + JSON.stringify(data);
+      });
+    </script>
+  </body>
+</html>

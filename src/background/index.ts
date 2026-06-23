@@ -3,6 +3,7 @@
 
 import type { Msg, Resp } from '../shared/messages';
 import { LLMError } from '../shared/types';
+import type { ApiConfig } from '../shared/types';
 import { getApiConfig, getProfile } from '../shared/storage';
 import { createProvider } from './llm/provider';
 import { mapFields } from './mapping';
@@ -17,12 +18,18 @@ function domainOf(url: string): string {
   }
 }
 
+/** Ollama's local daemon needs no key; every cloud provider does. */
+function isConfigured(config: ApiConfig | null): config is ApiConfig {
+  if (!config) return false;
+  return config.provider === 'ollama' || Boolean(config.apiKey);
+}
+
 async function handleMapFields(
   msg: Extract<Msg, { kind: 'MAP_FIELDS' }>,
 ): Promise<Resp> {
   const config = await getApiConfig();
-  if (!config?.apiKey) {
-    return { ok: false, code: 'NO_CONFIG', message: 'Set up your API key in Autofy options.' };
+  if (!isConfigured(config)) {
+    return { ok: false, code: 'NO_CONFIG', message: 'Set up your provider in Autofy options.' };
   }
   const profile = await getProfile();
   const domain = domainOf(msg.url);
@@ -47,8 +54,8 @@ async function handleParseResume(
   msg: Extract<Msg, { kind: 'PARSE_RESUME' }>,
 ): Promise<Resp> {
   const config = await getApiConfig();
-  if (!config?.apiKey) {
-    return { ok: false, code: 'NO_CONFIG', message: 'Set up your API key in Autofy options.' };
+  if (!isConfigured(config)) {
+    return { ok: false, code: 'NO_CONFIG', message: 'Set up your provider in Autofy options.' };
   }
   const provider = createProvider(config);
   const profile = await parseResume(msg.text, provider);

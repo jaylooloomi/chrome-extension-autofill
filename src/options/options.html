@@ -26,14 +26,18 @@
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic (Claude)</option>
+              <option value="ollama">Ollama (local / cloud)</option>
             </select>
           </label>
           <label>Model <input id="model" type="text" placeholder="model id" /></label>
         </div>
-        <label>API key <input id="apiKey" type="password" placeholder="paste your key" /></label>
-        <label>Custom endpoint (optional)
+        <label>API key <span id="key-optional" class="note" hidden>(optional for Ollama)</span>
+          <input id="apiKey" type="password" placeholder="paste your key" />
+        </label>
+        <label id="endpoint-label">Custom endpoint (optional)
           <input id="endpoint" type="text" placeholder="for OpenAI-compatible servers" />
         </label>
+        <p id="provider-note" class="note"></p>
         <button id="save-api" class="primary">Save API settings</button>
         <span id="api-status" class="status"></span>
       </section>

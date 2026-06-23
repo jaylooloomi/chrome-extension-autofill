@@ -6,7 +6,7 @@ accurately, into framework-controlled inputs, and **never touching your data**.
 
 - **BYOK** (bring your own key): your profile and API key live only in
   `chrome.storage.local`. There is no Autofy server. Calls go straight to *your*
-  chosen provider (Gemini / OpenAI / Anthropic).
+  chosen provider (Gemini / OpenAI / Anthropic / **Ollama**).
 - **Never auto-submits**: it fills, highlights, and lets you review/edit. You
   press submit.
 - **Learns each site**: the second visit to the same form fills from a local
@@ -36,6 +36,22 @@ npm test           # vitest (36 tests)
      <https://aistudio.google.com/app/apikey>), and save.
    - Fill in your profile (or paste a résumé and let it draft one), then save.
 5. Visit any form page → click the floating **Fill** button → review → submit.
+
+## Using Ollama (local or cloud models, e.g. MiniMax 2.5)
+
+Autofy can talk to a local [Ollama](https://ollama.com) daemon, which can also
+broker cloud models such as `minimax-m2.5:cloud`.
+
+1. In settings, choose **Ollama (local / cloud)**.
+2. Ollama URL defaults to `http://localhost:11434/v1`; the API key can be blank.
+3. Model: `minimax-m2.5:cloud` (or any local tag like `llama3.1`). For cloud
+   models run `ollama signin` once.
+4. **Let the extension reach Ollama** — Ollama blocks unknown origins by default.
+   Allow the extension and restart Ollama:
+   - Windows (PowerShell): `setx OLLAMA_ORIGINS "*"` then restart Ollama.
+   - macOS/Linux: `OLLAMA_ORIGINS=* ollama serve`.
+
+Without that last step the request fails with a CORS error.
 
 ## What's verified
 
