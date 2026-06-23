@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Autofy — AI Autofill for Job Applications (Workday · Greenhouse · Lever)",
+  "short_name": "Autofy",
+  "version": "0.1.0",
+  "description": "AI semantic autofill. Understands any form field and fills it from your profile. BYOK — your data never leaves your machine.",
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.anthropic.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Autofy"
+  }
+}

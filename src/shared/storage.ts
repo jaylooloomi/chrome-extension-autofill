@@ -1,0 +1,64 @@
+// Typed wrapper over chrome.storage.local.
+// Everything Autofy persists lives here: profile, API config, and the site
+// mapping cache. Nothing is ever sent to a developer server (spec §1, §8).
+
+import type { ApiConfig, Profile, SiteCacheEntry } from './types';
+
+const KEYS = {
+  profile: 'profile',
+  apiConfig: 'apiConfig',
+  siteCache: 'siteCache',
+} as const;
+
+async function get<T>(key: string): Promise<T | undefined> {
+  const obj = await chrome.storage.local.get(key);
+  return obj[key] as T | undefined;
+}
+
+async function set(key: string, value: unknown): Promise<void> {
+  await chrome.storage.local.set({ [key]: value });
+}
+
+export async function getProfile(): Promise<Profile> {
+  return (await get<Profile>(KEYS.profile)) ?? {};
+}
+
+export async function setProfile(profile: Profile): Promise<void> {
+  await set(KEYS.profile, profile);
+}
+
+export async function getApiConfig(): Promise<ApiConfig | null> {
+  return (await get<ApiConfig>(KEYS.apiConfig)) ?? null;
+}
+
+export async function setApiConfig(config: ApiConfig): Promise<void> {
+  await set(KEYS.apiConfig, config);
+}
+
+function cacheKey(domain: string, formSignature: string): string {
+  return `${domain}::${formSignature}`;
+}
+
+type SiteCache = Record<string, SiteCacheEntry>;
+
+export async function getCacheEntry(
+  domain: string,
+  formSignature: string,
+): Promise<SiteCacheEntry | null> {
+  const all = (await get<SiteCache>(KEYS.siteCache)) ?? {};
+  return all[cacheKey(domain, formSignature)] ?? null;
+}
+
+export async function putCacheEntry(entry: SiteCacheEntry): Promise<void> {
+  const all = (await get<SiteCache>(KEYS.siteCache)) ?? {};
+  all[cacheKey(entry.domain, entry.formSignature)] = entry;
+  await set(KEYS.siteCache, all);
+}
+
+export async function exportAll(): Promise<Record<string, unknown>> {
+  return chrome.storage.local.get(null);
+}
+
+export async function importAll(data: Record<string, unknown>): Promise<void> {
+  await chrome.storage.local.set(data);
+}
