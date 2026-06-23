@@ -27,8 +27,17 @@ export async function setProfile(profile: Profile): Promise<void> {
   await set(KEYS.profile, profile);
 }
 
+/** Default config: Ollama on the local daemon (no key needed). Used when the
+ *  user hasn't saved anything, so the extension is usable on first load. */
+export const DEFAULT_API_CONFIG: ApiConfig = {
+  provider: 'ollama',
+  apiKey: '',
+  model: 'minimax-m2.5:cloud',
+  endpoint: 'http://localhost:11434/v1',
+};
+
 export async function getApiConfig(): Promise<ApiConfig | null> {
-  return (await get<ApiConfig>(KEYS.apiConfig)) ?? null;
+  return (await get<ApiConfig>(KEYS.apiConfig)) ?? DEFAULT_API_CONFIG;
 }
 
 export async function setApiConfig(config: ApiConfig): Promise<void> {
