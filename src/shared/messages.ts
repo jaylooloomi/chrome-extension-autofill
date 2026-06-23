@@ -7,7 +7,7 @@
 import type { FieldSchema, MappingResponse, Profile } from './types';
 
 export type Msg =
-  | { kind: 'MAP_FIELDS'; fields: FieldSchema[]; formSignature: string; url: string }
+  | { kind: 'MAP_FIELDS'; fields: FieldSchema[]; formSignature: string; url: string; pageLang: string }
   | { kind: 'PARSE_RESUME'; text: string }
   | {
       kind: 'RECORD_CORRECTIONS';

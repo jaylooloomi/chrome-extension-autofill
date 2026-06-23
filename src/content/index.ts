@@ -66,6 +66,7 @@ if (!(window as unknown as { __autofy?: boolean }).__autofy) {
       fields,
       formSignature,
       url: location.href,
+      pageLang: document.documentElement.lang || navigator.language || 'en',
     });
     ui.setBusy(false);
 

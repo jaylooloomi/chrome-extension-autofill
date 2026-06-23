@@ -43,6 +43,7 @@ async function copyStatic() {
   for (const [from, to] of staticAssets) {
     if (existsSync(from)) await cp(from, to);
   }
+  if (existsSync('icons')) await cp('icons', 'dist/icons', { recursive: true });
 }
 
 async function run() {

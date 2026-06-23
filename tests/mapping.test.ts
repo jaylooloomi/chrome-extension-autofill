@@ -62,6 +62,13 @@ describe('mapping', () => {
     expect(map.field_2).toBeNull();
   });
 
+  it('adds a language instruction when a fill language is given', () => {
+    const prompt = buildMappingPrompt({ fields, profile: {} }, false, 'zh-TW');
+    expect(prompt).toContain('zh-TW');
+    const auto = buildMappingPrompt({ fields, profile: {} }, false, 'auto');
+    expect(auto).not.toContain('Write any text you generate');
+  });
+
   it('returns a validated map from a provider', async () => {
     const p = provider(vi.fn().mockResolvedValue({ field_0: 'a@b.com', field_1: null }));
     const map = await mapFields({ fields, profile: {} }, p);

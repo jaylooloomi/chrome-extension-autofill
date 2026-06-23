@@ -1,5 +1,5 @@
-// Options page logic: API config, résumé-paste profile draft, profile editing,
-// and backup import/export (spec §5.7).
+// Options page: API config, fill/UI language, résumé paste & file import,
+// profile editing, and backup (spec §5.7). UI strings are translated at runtime.
 
 import type { ApiConfig, Profile, ProviderName } from '../shared/types';
 import {
@@ -7,11 +7,15 @@ import {
   setApiConfig,
   getProfile,
   setProfile,
+  getPrefs,
+  setPrefs,
   exportAll,
   importAll,
+  type Prefs,
 } from '../shared/storage';
 import { sendToBackground } from '../shared/messages';
 import { SCALAR_FIELDS, getByPath, setByPath } from '../shared/profile-schema';
+import { t, resolveLocale, LOCALES, FILL_LANGUAGES, type Locale } from '../shared/i18n';
 
 const OLLAMA_DEFAULT_ENDPOINT = 'http://localhost:11434/v1';
 
@@ -36,12 +40,10 @@ const PROVIDER_NOTE: Record<ProviderName, string> = {
   ollama:
     'Fill in your Ollama URL (default http://localhost:11434/v1). API key can be ' +
     'left blank for the local daemon. For cloud models (e.g. minimax-m2.5:cloud) ' +
-    'run `ollama signin` first. IMPORTANT: let the extension reach Ollama by ' +
-    'setting OLLAMA_ORIGINS=* and restarting Ollama, otherwise the request is ' +
-    'blocked by CORS.',
+    'run `ollama signin` first. IMPORTANT: set OLLAMA_ORIGINS=* and restart Ollama, ' +
+    'otherwise the request is blocked by CORS.',
 };
 
-/** Providers whose key may be empty (local daemon). */
 function keyOptional(provider: ProviderName): boolean {
   return provider === 'ollama';
 }
@@ -49,6 +51,8 @@ function keyOptional(provider: ProviderName): boolean {
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let currentProfile: Profile = {};
+let prefs: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto' };
+let locale: Locale = 'en';
 
 function status(el: HTMLElement, msg: string, ok = true): void {
   el.textContent = msg;
@@ -59,6 +63,27 @@ function status(el: HTMLElement, msg: string, ok = true): void {
   }, 4000);
 }
 
+function applyI18n(): void {
+  document.documentElement.lang = locale;
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n!, locale);
+  });
+  document.querySelectorAll<HTMLElement>('[data-i18n-ph]').forEach((el) => {
+    (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(el.dataset.i18nPh!, locale);
+  });
+}
+
+function fillSelect(sel: HTMLSelectElement, opts: { code: string; name: string }[], selected: string): void {
+  sel.innerHTML = '';
+  for (const o of opts) {
+    const opt = document.createElement('option');
+    opt.value = o.code;
+    opt.textContent = o.name;
+    sel.appendChild(opt);
+  }
+  sel.value = selected;
+}
+
 function renderProfileFields(): void {
   const container = $('profile-fields');
   container.innerHTML = '';
@@ -67,9 +92,7 @@ function renderProfileFields(): void {
     if (f.type === 'textarea') label.className = 'full';
     label.textContent = f.label;
     const input =
-      f.type === 'textarea'
-        ? document.createElement('textarea')
-        : document.createElement('input');
+      f.type === 'textarea' ? document.createElement('textarea') : document.createElement('input');
     if (input instanceof HTMLInputElement) input.type = f.type ?? 'text';
     if (f.placeholder) input.placeholder = f.placeholder;
     input.dataset.path = f.path;
@@ -81,13 +104,11 @@ function renderProfileFields(): void {
 
 function readProfileFromForm(): Profile {
   let next = currentProfile;
-  const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-    '#profile-fields [data-path]',
-  );
-  inputs.forEach((input) => {
-    const path = input.dataset.path!;
-    next = setByPath(next, path, input.value.trim());
-  });
+  document
+    .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('#profile-fields [data-path]')
+    .forEach((input) => {
+      next = setByPath(next, input.dataset.path!, input.value.trim());
+    });
   return next;
 }
 
@@ -106,14 +127,55 @@ function applyProviderUI(provider: ProviderName): void {
   ($('key-help') as HTMLAnchorElement).href = KEY_HELP[provider];
   $('provider-note').textContent = PROVIDER_NOTE[provider];
   ($('key-optional') as HTMLElement).hidden = !keyOptional(provider);
-  // Prefill the Ollama URL the first time it is selected.
   const endpoint = $('endpoint') as HTMLInputElement;
-  if (provider === 'ollama' && !endpoint.value.trim()) {
-    endpoint.value = OLLAMA_DEFAULT_ENDPOINT;
+  if (provider === 'ollama' && !endpoint.value.trim()) endpoint.value = OLLAMA_DEFAULT_ENDPOINT;
+}
+
+async function draftFromResume(text: string): Promise<void> {
+  if (!text.trim()) {
+    status($('resume-status'), t('resume_placeholder', locale), false);
+    return;
   }
+  status($('resume-status'), '…');
+  const resp = await sendToBackground({ kind: 'PARSE_RESUME', text });
+  if (!resp.ok) {
+    status($('resume-status'), `Error: ${resp.message}`, false);
+    return;
+  }
+  if (resp.kind !== 'PARSE_RESUME') return;
+  currentProfile = mergeProfile(readProfileFromForm(), resp.profile);
+  renderProfileFields();
+  status($('resume-status'), t('saved', locale));
 }
 
 async function init(): Promise<void> {
+  prefs = await getPrefs();
+  locale = resolveLocale(prefs.uiLanguage);
+
+  // Language selectors
+  const uiLang = $('uiLang') as HTMLSelectElement;
+  fillSelect(uiLang, [{ code: 'auto', name: t('auto', locale) }, ...LOCALES], prefs.uiLanguage);
+  applyI18n();
+  uiLang.addEventListener('change', async () => {
+    prefs.uiLanguage = uiLang.value;
+    await setPrefs(prefs);
+    locale = resolveLocale(prefs.uiLanguage);
+    // Re-label the "Auto" option in the new locale.
+    uiLang.options[0].textContent = t('auto', locale);
+    applyI18n();
+  });
+
+  const fillLang = $('fillLang') as HTMLSelectElement;
+  fillSelect(
+    fillLang,
+    FILL_LANGUAGES.map((l) => (l.code === 'auto' ? { code: 'auto', name: t('auto', locale) } : l)),
+    prefs.fillLanguage,
+  );
+  fillLang.addEventListener('change', async () => {
+    prefs.fillLanguage = fillLang.value;
+    await setPrefs(prefs);
+  });
+
   // API config
   const config = await getApiConfig();
   const providerSel = $('provider') as HTMLSelectElement;
@@ -135,18 +197,19 @@ async function init(): Promise<void> {
   });
 
   $('save-api').addEventListener('click', async () => {
+    const provider = providerSel.value as ProviderName;
     const next: ApiConfig = {
-      provider: providerSel.value as ProviderName,
-      model: modelInput.value.trim() || SUGGESTED_MODEL[providerSel.value as ProviderName],
+      provider,
+      model: modelInput.value.trim() || SUGGESTED_MODEL[provider],
       apiKey: ($('apiKey') as HTMLInputElement).value.trim(),
       endpoint: ($('endpoint') as HTMLInputElement).value.trim() || undefined,
     };
-    if (!next.apiKey && !keyOptional(next.provider)) {
-      status($('api-status'), 'Please paste an API key.', false);
+    if (!next.apiKey && !keyOptional(provider)) {
+      status($('api-status'), t('popup_need_key', locale), false);
       return;
     }
     await setApiConfig(next);
-    status($('api-status'), 'Saved.');
+    status($('api-status'), t('saved', locale));
   });
 
   // Profile
@@ -156,26 +219,20 @@ async function init(): Promise<void> {
   $('save-profile').addEventListener('click', async () => {
     currentProfile = readProfileFromForm();
     await setProfile(currentProfile);
-    status($('profile-status'), 'Profile saved.');
+    status($('profile-status'), t('saved', locale));
   });
 
-  // Résumé paste
-  $('parse-resume').addEventListener('click', async () => {
-    const text = ($('resume') as HTMLTextAreaElement).value.trim();
-    if (!text) {
-      status($('resume-status'), 'Paste some résumé text first.', false);
-      return;
-    }
-    status($('resume-status'), 'Parsing with AI…');
-    const resp = await sendToBackground({ kind: 'PARSE_RESUME', text });
-    if (!resp.ok) {
-      status($('resume-status'), `Error: ${resp.message}`, false);
-      return;
-    }
-    if (resp.kind !== 'PARSE_RESUME') return;
-    currentProfile = mergeProfile(readProfileFromForm(), resp.profile);
-    renderProfileFields();
-    status($('resume-status'), 'Draft ready — review and save below.');
+  // Résumé: paste or import a text file
+  $('parse-resume').addEventListener('click', () =>
+    draftFromResume(($('resume') as HTMLTextAreaElement).value),
+  );
+  $('import-resume').addEventListener('click', () => ($('resume-file') as HTMLInputElement).click());
+  $('resume-file').addEventListener('change', async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    ($('resume') as HTMLTextAreaElement).value = text;
+    await draftFromResume(text);
   });
 
   // Backup
@@ -188,7 +245,6 @@ async function init(): Promise<void> {
     a.click();
     URL.revokeObjectURL(a.href);
   });
-
   $('import-btn').addEventListener('click', () => ($('import-file') as HTMLInputElement).click());
   $('import-file').addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -196,7 +252,7 @@ async function init(): Promise<void> {
     try {
       const data = JSON.parse(await file.text()) as Record<string, unknown>;
       await importAll(data);
-      status($('backup-status'), 'Imported. Reloading…');
+      status($('backup-status'), t('saved', locale));
       setTimeout(() => location.reload(), 800);
     } catch {
       status($('backup-status'), 'Invalid backup file.', false);

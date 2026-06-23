@@ -9,19 +9,23 @@
   <body>
     <main class="wrap">
       <header>
-        <h1>Autofy</h1>
-        <p class="tag">AI semantic autofill · BYOK · your data never leaves this machine.</p>
+        <div class="titlebar">
+          <h1>Autofy</h1>
+          <label class="uilang"><span data-i18n="ui_language">Interface language</span>
+            <select id="uiLang"></select>
+          </label>
+        </div>
+        <p class="tag" data-i18n="tagline">AI semantic autofill · BYOK · your data never leaves this machine.</p>
       </header>
 
       <section class="card">
-        <h2>1 · API key (BYOK)</h2>
+        <h2 data-i18n="sec_api">1 · API key (BYOK)</h2>
         <p class="hint">
-          Pick a provider and paste your key. We recommend
-          <strong>Gemini Flash</strong> — it has a free tier.
-          <a id="key-help" href="#" target="_blank" rel="noopener">How to get a key</a>
+          <span data-i18n="api_hint">Pick a provider and paste your key.</span>
+          <a id="key-help" href="#" target="_blank" rel="noopener" data-i18n="key_help">How to get a key</a>
         </p>
         <div class="grid">
-          <label>Provider
+          <label><span data-i18n="provider">Provider</span>
             <select id="provider">
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI</option>
@@ -29,41 +33,51 @@
               <option value="ollama">Ollama (local / cloud)</option>
             </select>
           </label>
-          <label>Model <input id="model" type="text" placeholder="model id" /></label>
+          <label><span data-i18n="model">Model</span> <input id="model" type="text" placeholder="model id" /></label>
         </div>
-        <label>API key <span id="key-optional" class="note" hidden>(optional for Ollama)</span>
+        <label><span data-i18n="api_key">API key</span> <span id="key-optional" class="note" data-i18n="key_optional" hidden>(optional for Ollama)</span>
           <input id="apiKey" type="password" placeholder="paste your key" />
         </label>
-        <label id="endpoint-label">Custom endpoint (optional)
+        <label id="endpoint-label"><span data-i18n="endpoint">Custom endpoint (optional)</span>
           <input id="endpoint" type="text" placeholder="for OpenAI-compatible servers" />
         </label>
         <p id="provider-note" class="note"></p>
-        <button id="save-api" class="primary">Save API settings</button>
+        <div class="grid">
+          <label><span data-i18n="fill_language">Fill language</span>
+            <select id="fillLang"></select>
+          </label>
+        </div>
+        <p class="note" data-i18n="fill_language_hint">Language used when filling. Auto-detect uses the page language.</p>
+        <button id="save-api" class="primary" data-i18n="save_api">Save API settings</button>
         <span id="api-status" class="status"></span>
       </section>
 
       <section class="card">
-        <h2>2 · Quick start from your résumé (optional)</h2>
-        <p class="hint">Paste your résumé text. Autofy drafts a profile with AI — you review and edit below before saving.</p>
-        <textarea id="resume" rows="6" placeholder="Paste résumé text here…"></textarea>
-        <button id="parse-resume">Draft profile with AI</button>
+        <h2 data-i18n="sec_resume">2 · Quick start from your résumé (optional)</h2>
+        <p class="hint" data-i18n="resume_hint">Paste résumé text or import a text file.</p>
+        <textarea id="resume" rows="6" data-i18n-ph="resume_placeholder" placeholder="Paste résumé text here…"></textarea>
+        <div class="row">
+          <button id="parse-resume" data-i18n="draft_profile">Draft profile with AI</button>
+          <button id="import-resume" data-i18n="import_file">Import text file</button>
+          <input id="resume-file" type="file" accept=".txt,.md,.text,text/plain" hidden />
+        </div>
         <span id="resume-status" class="status"></span>
       </section>
 
       <section class="card">
-        <h2>3 · Your profile</h2>
-        <p class="hint">This is what Autofy fills forms from. Edit anything; blank fields are ignored.</p>
+        <h2 data-i18n="sec_profile">3 · Your profile</h2>
+        <p class="hint" data-i18n="profile_hint">This is what Autofy fills forms from.</p>
         <div id="profile-fields" class="profile-grid"></div>
-        <button id="save-profile" class="primary">Save profile</button>
+        <button id="save-profile" class="primary" data-i18n="save_profile">Save profile</button>
         <span id="profile-status" class="status"></span>
       </section>
 
       <section class="card">
-        <h2>4 · Backup</h2>
-        <p class="hint">Export everything (profile + settings + learned sites) to a file, or import a backup.</p>
+        <h2 data-i18n="sec_backup">4 · Backup</h2>
+        <p class="hint" data-i18n="backup_hint">Export everything, or import a backup.</p>
         <div class="row">
-          <button id="export">Export backup</button>
-          <button id="import-btn">Import backup</button>
+          <button id="export" data-i18n="export">Export backup</button>
+          <button id="import-btn" data-i18n="import">Import backup</button>
           <input id="import-file" type="file" accept="application/json" hidden />
         </div>
         <span id="backup-status" class="status"></span>

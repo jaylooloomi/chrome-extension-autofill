@@ -4,7 +4,7 @@
 import type { Msg, Resp } from '../shared/messages';
 import { LLMError } from '../shared/types';
 import type { ApiConfig } from '../shared/types';
-import { getApiConfig, getProfile } from '../shared/storage';
+import { getApiConfig, getProfile, getPrefs } from '../shared/storage';
 import { listProfilePaths } from '../shared/profile-schema';
 import { createProvider } from './llm/provider';
 import { mapFields } from './mapping';
@@ -46,8 +46,10 @@ async function handleMapFields(
     }
   }
 
+  const prefs = await getPrefs();
+  const language = prefs.fillLanguage === 'auto' ? msg.pageLang : prefs.fillLanguage;
   const provider = createProvider(config);
-  const map = await mapFields({ fields: msg.fields, profile }, provider, { fake });
+  const map = await mapFields({ fields: msg.fields, profile }, provider, { fake, language });
   if (!fake) {
     // Learn the site mapping for next time (best-effort).
     try {

@@ -13,9 +13,13 @@ const FEW_SHOT = `Examples (job application context):
 
 /** Build the mapping prompt. When `fake` is true (the user has no profile),
  *  ask for realistic, internally-consistent sample data instead of nulls. */
-export function buildMappingPrompt(req: MappingRequest, fake = false): string {
+export function buildMappingPrompt(req: MappingRequest, fake = false, language?: string): string {
   // Never send captcha / do-not-fill fields to the model.
   const fields = req.fields.filter((f) => !f.noFill);
+  const langLine =
+    language && language !== 'auto'
+      ? `- Write any text you generate (names, addresses, free text, option choices) in ${language}.`
+      : '';
   if (fake) {
     return [
       'Generate realistic SAMPLE form data for autofill testing.',
@@ -29,10 +33,13 @@ export function buildMappingPrompt(req: MappingRequest, fake = false): string {
       '  pick a REAL choice, never an empty/placeholder option like "Select…".',
       '- For checkboxes, return "true" or "false".',
       '- Use realistic but clearly fictional data. Do NOT return null — fill everything.',
+      langLine,
       '- Output strictly: { "field_0": "value", ... }. No prose.',
       '',
       `FIELDS:\n${JSON.stringify(fields, null, 0)}`,
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
   return [
     'You map web form fields to a user profile for autofill.',
@@ -43,6 +50,7 @@ export function buildMappingPrompt(req: MappingRequest, fake = false): string {
     '- For <select>/radio fields, return the option TEXT or value that fits.',
     '- For checkboxes, return "true" or "false".',
     '- If the profile has no matching data, return null for that ref. Never invent data.',
+    langLine,
     '- Output strictly: { "field_0": "value", "field_1": null, ... }. No prose.',
     '',
     FEW_SHOT,
@@ -50,7 +58,9 @@ export function buildMappingPrompt(req: MappingRequest, fake = false): string {
     `FIELDS:\n${JSON.stringify(fields, null, 0)}`,
     '',
     `PROFILE:\n${JSON.stringify(req.profile, null, 0)}`,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /** Coerce a raw model response into a clean MappingResponse covering every ref.
@@ -79,10 +89,10 @@ export function validateMapping(raw: unknown, fields: FieldSchema[]): MappingRes
 export async function mapFields(
   req: MappingRequest,
   provider: LLMProvider,
-  opts: { fake?: boolean; signal?: AbortSignal } = {},
+  opts: { fake?: boolean; language?: string; signal?: AbortSignal } = {},
 ): Promise<MappingResponse> {
-  const { fake = false, signal } = opts;
-  const prompt = buildMappingPrompt(req, fake);
+  const { fake = false, language, signal } = opts;
+  const prompt = buildMappingPrompt(req, fake, language);
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {

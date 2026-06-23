@@ -81,6 +81,12 @@ logic; this last mile exercises real network + real DOM.
   sample data (flagged "SAMPLE DATA"); captcha fields are still left blank.
 - **Button placement**: the Fill button anchors to each `<form>` on the page
   (floats bottom-right when there is no form). This is pure DOM — no AI cost.
+- **Fill language**: choose a target language in settings, or leave it on
+  Auto-detect (uses the page's language) — affects generated/sample text.
+- **Profile import**: paste résumé text *or* import a `.txt` file; AI drafts a
+  profile you review before saving.
+- **Interface language**: the options/popup UI is translated (English, 繁體中文,
+  简体中文, 日本語), selectable in settings or following the browser.
 
 ## Known limits (spec §11)
 

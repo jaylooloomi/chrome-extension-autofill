@@ -8,7 +8,18 @@ const KEYS = {
   profile: 'profile',
   apiConfig: 'apiConfig',
   siteCache: 'siteCache',
+  prefs: 'prefs',
 } as const;
+
+/** UI + fill preferences (separate from API config). */
+export interface Prefs {
+  /** Interface language; 'auto' follows the browser. */
+  uiLanguage: string;
+  /** Fill output language; 'auto' uses the page language. */
+  fillLanguage: string;
+}
+
+const DEFAULT_PREFS: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto' };
 
 async function get<T>(key: string): Promise<T | undefined> {
   const obj = await chrome.storage.local.get(key);
@@ -62,6 +73,14 @@ export async function putCacheEntry(entry: SiteCacheEntry): Promise<void> {
   const all = (await get<SiteCache>(KEYS.siteCache)) ?? {};
   all[cacheKey(entry.domain, entry.formSignature)] = entry;
   await set(KEYS.siteCache, all);
+}
+
+export async function getPrefs(): Promise<Prefs> {
+  return { ...DEFAULT_PREFS, ...((await get<Partial<Prefs>>(KEYS.prefs)) ?? {}) };
+}
+
+export async function setPrefs(prefs: Prefs): Promise<void> {
+  await set(KEYS.prefs, prefs);
 }
 
 export async function exportAll(): Promise<Record<string, unknown>> {
