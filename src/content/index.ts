@@ -1,14 +1,13 @@
-// Content script bootstrap: injects the floating button and orchestrates the
-// scan -> map -> fill -> review flow (spec §6). Runs on every page; the heavy
-// work only happens when the user clicks Fill.
+// Content script bootstrap: anchors a Fill button to each detected form (or a
+// floating one when there is no form) and orchestrates the
+// scan -> map -> fill -> review flow (spec §6). Heavy work only on click.
 
-import { scanFields } from './detector';
+import { scanFields, findFormContainers } from './detector';
 import { resolve } from './refs';
 import { fillFields } from './fill-engine';
 import { sendToBackground } from '../shared/messages';
-import { mountUI, type ReviewContext } from './review-ui';
+import { mountUI, type FillTarget, type ReviewContext } from './review-ui';
 
-// Avoid double-injection (e.g. SPA re-entry).
 if (!(window as unknown as { __autofy?: boolean }).__autofy) {
   (window as unknown as { __autofy?: boolean }).__autofy = true;
 
@@ -24,10 +23,41 @@ if (!(window as unknown as { __autofy?: boolean }).__autofy) {
     },
   });
 
-  async function runFill() {
-    const { fields, formSignature } = scanFields(document);
+  function computeTargets(): FillTarget[] {
+    const forms = findFormContainers(document);
+    return forms.length
+      ? forms.map((f) => ({ root: f, anchor: f }))
+      : [{ root: document, anchor: null }];
+  }
+
+  /** A cheap signature of the current form set, to skip needless re-renders. */
+  function targetsKey(targets: FillTarget[]): string {
+    return targets.map((t, i) => (t.anchor ? t.anchor.id || `f${i}` : 'body')).join('|');
+  }
+
+  let lastKey = '';
+  function refresh(): void {
+    const targets = computeTargets();
+    const key = targetsKey(targets);
+    if (key === lastKey) return;
+    lastKey = key;
+    ui.setTargets(targets);
+  }
+
+  refresh();
+
+  // Re-detect forms on SPA DOM changes (debounced). Our own button lives in a
+  // shadow root, so it doesn't trigger this observer.
+  let debounce: ReturnType<typeof setTimeout> | undefined;
+  new MutationObserver(() => {
+    clearTimeout(debounce);
+    debounce = setTimeout(refresh, 800);
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
+  async function runFill(root: ParentNode) {
+    const { fields, formSignature } = scanFields(root);
     if (fields.length === 0) {
-      ui.toast('Autofy: no fillable fields found on this page.');
+      ui.toast('Autofy: no fillable fields found here.');
       return;
     }
     ui.setBusy(true);

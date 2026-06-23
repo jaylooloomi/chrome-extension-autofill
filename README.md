@@ -70,6 +70,18 @@ Without that last step the request fails with a CORS error.
 a live ATS form with a real API key. The above gives high confidence in the
 logic; this last mile exercises real network + real DOM.
 
+## Behavior notes
+
+- **Captcha / verification codes are never auto-filled.** Fields whose
+  label/name/placeholder look like a captcha (`驗證碼`, "verification code", …)
+  are detected, excluded from the AI request, and shown as **manual ✋** in the
+  review panel for you to type. Their value lives in an image, so any filled
+  value would be wrong.
+- **Fake-data mode**: with an empty profile, the form is filled with consistent
+  sample data (flagged "SAMPLE DATA"); captcha fields are still left blank.
+- **Button placement**: the Fill button anchors to each `<form>` on the page
+  (floats bottom-right when there is no form). This is pure DOM — no AI cost.
+
 ## Known limits (spec §11)
 
 Cross-origin iframes (payment pages), anti-bot sites, and canvas-rendered inputs

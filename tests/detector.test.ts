@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { scanFields, getLabel, fieldSignature } from '../src/content/detector';
+import {
+  scanFields,
+  getLabel,
+  fieldSignature,
+  findFormContainers,
+  isCaptchaField,
+} from '../src/content/detector';
 
 function setBody(html: string) {
   document.body.innerHTML = html;
@@ -60,6 +66,34 @@ describe('detector', () => {
     setBody(html);
     const second = scanFields(document);
     expect(second.formSignature).toBe(first.formSignature);
+  });
+
+  it('flags captcha / verification-code fields as noFill', () => {
+    setBody(`
+      <label for="c">驗證碼 (不區分大小寫)</label><input id="c" name="captcha" type="text">
+      <label for="e">Email</label><input id="e" name="email" type="email">
+      <input name="vcode" type="text" aria-label="Verification code">
+    `);
+    const { fields } = scanFields(document);
+    expect(fields.find((f) => f.name === 'captcha')!.noFill).toBe(true);
+    expect(fields.find((f) => f.name === 'vcode')!.noFill).toBe(true);
+    expect(fields.find((f) => f.name === 'email')!.noFill).toBeUndefined();
+  });
+
+  it('isCaptchaField matches common phrasings, not postal/country code', () => {
+    expect(isCaptchaField({ label: '驗證碼' })).toBe(true);
+    expect(isCaptchaField({ name: 'captcha_input' })).toBe(true);
+    expect(isCaptchaField({ label: 'Postal code' })).toBe(false);
+    expect(isCaptchaField({ label: 'Country' })).toBe(false);
+  });
+
+  it('finds only forms that contain fillable fields', () => {
+    setBody(`
+      <form id="a"><input name="x" type="text"></form>
+      <form id="b"></form>
+      <form id="c"><input type="hidden" name="h"></form>
+    `);
+    expect(findFormContainers(document).map((f) => f.id)).toEqual(['a']);
   });
 
   it('normalizes separators/case but keeps digits distinct', () => {

@@ -21,6 +21,9 @@ export interface FieldSchema {
   required?: boolean;
   /** Present for <select> / radio groups. */
   options?: { value: string; text: string }[] | null;
+  /** True for fields that must NOT be auto-filled (e.g. captcha / verification
+   *  codes) — never profile data and never sensibly faked. Left for the user. */
+  noFill?: boolean;
   /** Stable signature used as a cache key (spec §7). */
   signature: string;
 }

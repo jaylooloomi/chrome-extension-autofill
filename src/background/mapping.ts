@@ -14,6 +14,8 @@ const FEW_SHOT = `Examples (job application context):
 /** Build the mapping prompt. When `fake` is true (the user has no profile),
  *  ask for realistic, internally-consistent sample data instead of nulls. */
 export function buildMappingPrompt(req: MappingRequest, fake = false): string {
+  // Never send captcha / do-not-fill fields to the model.
+  const fields = req.fields.filter((f) => !f.noFill);
   if (fake) {
     return [
       'Generate realistic SAMPLE form data for autofill testing.',
@@ -23,12 +25,13 @@ export function buildMappingPrompt(req: MappingRequest, fake = false): string {
       '- Fill EVERY field with a sensible value matching its type, label, and options.',
       '- Keep values consistent (same person: name, an email derived from that name, a',
       '  matching phone, address, etc.).',
-      '- For <select>/radio fields, return one of the provided option TEXT or value.',
+      '- For <select>/radio fields, return one of the provided option TEXT or value —',
+      '  pick a REAL choice, never an empty/placeholder option like "Select…".',
       '- For checkboxes, return "true" or "false".',
       '- Use realistic but clearly fictional data. Do NOT return null — fill everything.',
       '- Output strictly: { "field_0": "value", ... }. No prose.',
       '',
-      `FIELDS:\n${JSON.stringify(req.fields, null, 0)}`,
+      `FIELDS:\n${JSON.stringify(fields, null, 0)}`,
     ].join('\n');
   }
   return [
@@ -44,7 +47,7 @@ export function buildMappingPrompt(req: MappingRequest, fake = false): string {
     '',
     FEW_SHOT,
     '',
-    `FIELDS:\n${JSON.stringify(req.fields, null, 0)}`,
+    `FIELDS:\n${JSON.stringify(fields, null, 0)}`,
     '',
     `PROFILE:\n${JSON.stringify(req.profile, null, 0)}`,
   ].join('\n');
@@ -59,6 +62,10 @@ export function validateMapping(raw: unknown, fields: FieldSchema[]): MappingRes
   const obj = raw as Record<string, unknown>;
   const out: MappingResponse = {};
   for (const field of fields) {
+    if (field.noFill) {
+      out[field.ref] = null; // captcha / verification code — leave for the user
+      continue;
+    }
     const v = obj[field.ref];
     if (typeof v === 'string') out[field.ref] = v;
     else if (typeof v === 'number' || typeof v === 'boolean') out[field.ref] = String(v);

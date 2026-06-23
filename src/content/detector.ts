@@ -146,6 +146,24 @@ export function fieldSignature(parts: {
   return `${token}:${parts.type}`;
 }
 
+// Captcha / verification-code fields must never be auto-filled: the value lives
+// in an image the user reads, so any filled value is wrong and may trip anti-bot.
+const CAPTCHA_RE =
+  /captcha|驗證碼|验证码|verif(?:y|ication)\s*code|security\s*code|圖形驗證|圖片驗證|認證碼|確認碼|人機|i'?m not a robot/i;
+
+export function isCaptchaField(parts: {
+  label?: string;
+  name?: string;
+  id?: string;
+  placeholder?: string;
+  nearbyText?: string;
+}): boolean {
+  const hay = [parts.label, parts.name, parts.id, parts.placeholder, parts.nearbyText]
+    .filter(Boolean)
+    .join(' ');
+  return CAPTCHA_RE.test(hay);
+}
+
 function hash(str: string): string {
   let h = 5381;
   for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
@@ -186,6 +204,7 @@ export function scanFields(root: ParentNode = document): ScanResult {
     const required =
       el.hasAttribute('required') || el.getAttribute('aria-required') === 'true';
 
+    const nearbyText = getNearbyText(el);
     const ref = register(el);
     fields.push({
       ref,
@@ -195,12 +214,21 @@ export function scanFields(root: ParentNode = document): ScanResult {
       placeholder,
       name,
       id,
-      nearbyText: getNearbyText(el),
+      nearbyText,
       required,
       options: optionsOf(el, tag, type),
+      noFill: isCaptchaField({ label, name, id, placeholder, nearbyText }) || undefined,
       signature: fieldSignature({ name, id, label, type }),
     });
   }
 
   return { fields, formSignature: computeFormSignature(fields) };
+}
+
+/** Find <form> elements that contain at least one fillable field. Used to
+ *  anchor the Fill button to the relevant form on the page (pure DOM). */
+export function findFormContainers(root: ParentNode = document): HTMLElement[] {
+  return Array.from(root.querySelectorAll('form')).filter((f) =>
+    Array.from(f.querySelectorAll('input, select, textarea, [contenteditable]')).some(isFillable),
+  );
 }

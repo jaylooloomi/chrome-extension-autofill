@@ -1,7 +1,8 @@
-// Floating button + pre-submit review panel (spec §4.4, §5.3).
-// Rendered inside a Shadow DOM so host-page CSS cannot break it. The panel
-// NEVER submits the form — it highlights, lists, and lets the user edit; the
-// user submits manually.
+// Fill button(s) + pre-submit review panel (spec §4.4, §5.3).
+// Rendered inside a Shadow DOM so host-page CSS cannot break it. A Fill button
+// is anchored to each detected form (or floats bottom-right when no form is
+// found). The panel NEVER submits — it highlights, lists, and lets the user
+// edit; captcha/verification fields are flagged "manual" and left blank.
 
 import type { FieldSchema, FillResult, MappingResponse } from '../shared/types';
 import { fillElement } from './fill-engine';
@@ -11,16 +12,21 @@ export interface ReviewContext {
   formSignature: string;
 }
 
+/** A place to put a Fill button. `anchor` null => floating bottom-right. */
+export interface FillTarget {
+  root: ParentNode;
+  anchor: HTMLElement | null;
+}
+
 export interface UIHandlers {
-  onFill(): void;
-  /** Final values keyed by field.signature, after user edits. */
+  onFill(root: ParentNode): void;
   onConfirm(values: Record<string, string | null>, ctx: ReviewContext): void;
 }
 
 const STYLES = `
 :host { all: initial; }
 .fab {
-  position: fixed; right: 20px; bottom: 20px; z-index: 2147483646;
+  position: fixed; z-index: 2147483646;
   width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
   background: #4f46e5; color: #fff; font: 600 13px/1 system-ui, sans-serif;
   box-shadow: 0 6px 20px rgba(79,70,229,.45); transition: transform .15s;
@@ -39,13 +45,15 @@ const STYLES = `
 .head .sub { font-weight: 400; opacity: .85; font-size: 11px; }
 .rows { overflow-y: auto; padding: 6px 0; }
 .row { padding: 7px 14px; border-bottom: 1px solid #f0f0f0; }
-.row .lbl { font-size: 11px; color: #555; margin-bottom: 3px; display: flex; gap: 6px; }
+.row .lbl { font-size: 11px; color: #555; margin-bottom: 3px; display: flex; gap: 6px;
+  justify-content: space-between; align-items: center; }
 .row input { width: 100%; box-sizing: border-box; padding: 5px 7px; font: 13px system-ui;
   border: 1px solid #ddd; border-radius: 6px; }
-.badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; }
+.badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
 .badge.filled { background: #dcfce7; color: #166534; }
 .badge.skipped { background: #f3f4f6; color: #6b7280; }
 .badge.error { background: #fee2e2; color: #991b1b; }
+.badge.manual { background: #fef3c7; color: #92400e; }
 .foot { padding: 10px 14px; display: flex; gap: 8px; border-top: 1px solid #eee; }
 .foot button { flex: 1; padding: 8px; border-radius: 8px; border: none; cursor: pointer;
   font: 600 13px system-ui; }
@@ -59,10 +67,12 @@ const STYLES = `
 
 const HL_FILLED = '2px solid #22c55e';
 const HL_ERROR = '2px solid #ef4444';
+const HL_MANUAL = '2px dashed #f59e0b';
 
 export interface UIController {
   setBusy(busy: boolean): void;
   toast(message: string): void;
+  setTargets(targets: FillTarget[]): void;
   showReview(
     fields: FieldSchema[],
     results: FillResult[],
@@ -85,22 +95,54 @@ export function mountUI(handlers: UIHandlers): UIController {
   style.textContent = STYLES;
   shadow.appendChild(style);
 
-  const fab = document.createElement('button');
-  fab.className = 'fab';
-  fab.textContent = 'Fill';
-  fab.title = 'Autofy — fill this form';
-  fab.addEventListener('click', () => handlers.onFill());
-
   const panel = document.createElement('div');
   panel.className = 'panel';
-
   const toastEl = document.createElement('div');
   toastEl.className = 'toast';
-
-  shadow.append(fab, panel, toastEl);
+  shadow.append(panel, toastEl);
   (document.documentElement || document.body).appendChild(host);
 
+  let buttons: { btn: HTMLButtonElement; anchor: HTMLElement | null }[] = [];
+  let busy = false;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  let rafScheduled = false;
+
+  function place(item: { btn: HTMLButtonElement; anchor: HTMLElement | null }): void {
+    const { btn, anchor } = item;
+    btn.style.position = 'fixed';
+    if (!anchor) {
+      btn.style.right = '20px';
+      btn.style.bottom = '20px';
+      btn.style.left = 'auto';
+      btn.style.top = 'auto';
+      btn.style.display = 'block';
+      return;
+    }
+    const r = anchor.getBoundingClientRect();
+    const offscreen = r.bottom < 0 || r.top > window.innerHeight || r.width === 0;
+    btn.style.display = offscreen ? 'none' : 'block';
+    const left = Math.min(window.innerWidth - 64, Math.max(8, r.right - 64));
+    const top = Math.min(window.innerHeight - 60, Math.max(8, r.top + 8));
+    btn.style.left = `${Math.round(left)}px`;
+    btn.style.top = `${Math.round(top)}px`;
+    btn.style.right = 'auto';
+    btn.style.bottom = 'auto';
+  }
+
+  function reposition(): void {
+    for (const item of buttons) place(item);
+  }
+
+  function scheduleReposition(): void {
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(() => {
+      rafScheduled = false;
+      reposition();
+    });
+  }
+  window.addEventListener('scroll', scheduleReposition, { passive: true, capture: true });
+  window.addEventListener('resize', scheduleReposition, { passive: true });
 
   function clearHighlights(resolve: (ref: string) => Element | undefined, refs: string[]) {
     for (const ref of refs) {
@@ -110,15 +152,32 @@ export function mountUI(handlers: UIHandlers): UIController {
   }
 
   const controller: UIController = {
-    setBusy(busy) {
-      fab.disabled = busy;
-      fab.textContent = busy ? '…' : 'Fill';
+    setBusy(b) {
+      busy = b;
+      for (const { btn } of buttons) {
+        btn.disabled = b;
+        btn.textContent = b ? '…' : 'Fill';
+      }
     },
     toast(message) {
       toastEl.textContent = message;
       toastEl.classList.add('show');
       if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4000);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4500);
+    },
+    setTargets(targets) {
+      for (const { btn } of buttons) btn.remove();
+      buttons = targets.map((t) => {
+        const btn = document.createElement('button');
+        btn.className = 'fab';
+        btn.textContent = busy ? '…' : 'Fill';
+        btn.disabled = busy;
+        btn.title = 'Autofy — fill this form';
+        btn.addEventListener('click', () => handlers.onFill(t.root));
+        shadow.appendChild(btn);
+        return { btn, anchor: t.anchor };
+      });
+      reposition();
     },
     showReview(fields, results, map, ctx, resolve, fake = false) {
       const status = new Map(results.map((r) => [r.ref, r]));
@@ -128,7 +187,7 @@ export function mountUI(handlers: UIHandlers): UIController {
       head.className = 'head';
       const filledCount = results.filter((r) => r.status === 'filled').length;
       const sub = fake
-        ? `⚠ SAMPLE DATA (no profile set) · ${filledCount}/${fields.length} filled · review before submitting`
+        ? `⚠ SAMPLE DATA (no profile) · ${filledCount}/${fields.length} filled · review before submitting`
         : `${filledCount}/${fields.length} filled · nothing is sent automatically`;
       head.innerHTML = `<span>Review &amp; submit<br><span class="sub">${sub}</span></span>`;
       panel.appendChild(head);
@@ -138,19 +197,28 @@ export function mountUI(handlers: UIHandlers): UIController {
       const inputs: { field: FieldSchema; input: HTMLInputElement }[] = [];
 
       for (const f of fields) {
-        const r = status.get(f.ref);
-        const st = r?.status ?? 'skipped';
+        const st = status.get(f.ref)?.status ?? 'skipped';
+        const manual = Boolean(f.noFill);
         const el = resolve(f.ref);
         if (el instanceof HTMLElement) {
-          el.style.outline = st === 'error' ? HL_ERROR : st === 'filled' ? HL_FILLED : '';
+          el.style.outline = manual
+            ? HL_MANUAL
+            : st === 'error'
+              ? HL_ERROR
+              : st === 'filled'
+                ? HL_FILLED
+                : '';
         }
         const row = document.createElement('div');
         row.className = 'row';
         const lbl = document.createElement('div');
         lbl.className = 'lbl';
-        lbl.innerHTML = `<span>${escapeHtml(labelFor(f))}</span><span class="badge ${st}">${st}</span>`;
+        const badgeClass = manual ? 'manual' : st;
+        const badgeText = manual ? 'manual ✋' : st;
+        lbl.innerHTML = `<span>${escapeHtml(labelFor(f))}</span><span class="badge ${badgeClass}">${badgeText}</span>`;
         const input = document.createElement('input');
         input.value = map[f.ref] ?? '';
+        if (manual) input.placeholder = 'enter this yourself (e.g. captcha)';
         row.append(lbl, input);
         rows.appendChild(row);
         inputs.push({ field: f, input });
@@ -167,26 +235,26 @@ export function mountUI(handlers: UIHandlers): UIController {
       close.textContent = 'Close';
       foot.append(confirm, close);
       panel.appendChild(foot);
-
       panel.classList.add('open');
 
+      const refs = fields.map((f) => f.ref);
       close.addEventListener('click', () => {
         panel.classList.remove('open');
-        clearHighlights(resolve, fields.map((f) => f.ref));
+        clearHighlights(resolve, refs);
       });
 
       confirm.addEventListener('click', () => {
         const values: Record<string, string | null> = {};
         for (const { field, input } of inputs) {
           const v = input.value;
-          values[field.signature] = v === '' ? null : v;
-          // Re-apply any user edits to the live field.
           const el = resolve(field.ref);
           if (el && v !== '') fillElement(el, v);
+          // Don't learn captcha / do-not-fill fields.
+          if (!field.noFill) values[field.signature] = v === '' ? null : v;
         }
         handlers.onConfirm(values, ctx);
         panel.classList.remove('open');
-        clearHighlights(resolve, fields.map((f) => f.ref));
+        clearHighlights(resolve, refs);
         controller.toast('Saved. Autofy will remember this form.');
       });
     },

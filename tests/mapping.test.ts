@@ -48,6 +48,20 @@ describe('mapping', () => {
     expect(() => validateMapping('nope', fields)).toThrow(LLMError);
   });
 
+  it('never sends captcha (noFill) fields to the model and forces them null', () => {
+    const withCaptcha: FieldSchema[] = [
+      ...fields,
+      { ref: 'field_2', tag: 'input', type: 'text', signature: 'captcha:text', noFill: true },
+    ];
+    const prompt = buildMappingPrompt({ fields: withCaptcha, profile: {} });
+    expect(prompt).not.toContain('field_2');
+    const map = validateMapping(
+      { field_0: 'a@b.com', field_1: 'x', field_2: 'IGNORED' },
+      withCaptcha,
+    );
+    expect(map.field_2).toBeNull();
+  });
+
   it('returns a validated map from a provider', async () => {
     const p = provider(vi.fn().mockResolvedValue({ field_0: 'a@b.com', field_1: null }));
     const map = await mapFields({ fields, profile: {} }, p);
