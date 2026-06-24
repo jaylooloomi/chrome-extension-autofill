@@ -6,7 +6,7 @@ import { LLMError } from '../shared/types';
 import type { ApiConfig } from '../shared/types';
 import { getApiConfig, getProfile, getPrefs } from '../shared/storage';
 import { listProfilePaths } from '../shared/profile-schema';
-import { createProvider } from './llm/provider';
+import { createProvider, codeForStatus } from './llm/provider';
 import { mapFields } from './mapping';
 import { parseResume } from './resume';
 import { getCachedMapping, learn, MIN_COVERAGE, toSignatureValues } from './cache';
@@ -80,6 +80,48 @@ async function handleMapFields(
   return { ok: true, kind: 'MAP_FIELDS', map, fromCache: false, fake };
 }
 
+/** List available models for a provider — used by the options "Test connection"
+ *  button to confirm reachability and populate the model picker. */
+async function listModels(config: ApiConfig): Promise<string[]> {
+  if (config.provider === 'gemini') {
+    const base = config.endpoint || 'https://generativelanguage.googleapis.com/v1beta';
+    const res = await fetch(`${base.replace(/\/$/, '')}/models?key=${encodeURIComponent(config.apiKey)}`);
+    if (!res.ok) throw new LLMError(codeForStatus(res.status), await res.text());
+    const d = (await res.json()) as { models?: { name?: string }[] };
+    return (d.models ?? []).map((m) => (m.name ?? '').replace(/^models\//, '')).filter(Boolean);
+  }
+  if (config.provider === 'anthropic') {
+    const base = config.endpoint || 'https://api.anthropic.com/v1';
+    const res = await fetch(`${base.replace(/\/$/, '')}/models`, {
+      headers: {
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+    });
+    if (!res.ok) throw new LLMError(codeForStatus(res.status), await res.text());
+    const d = (await res.json()) as { data?: { id?: string }[] };
+    return (d.data ?? []).map((m) => m.id ?? '').filter(Boolean);
+  }
+  // openai / ollama (OpenAI-compatible /v1/models)
+  const fallback =
+    config.provider === 'ollama' ? 'http://localhost:11434/v1' : 'https://api.openai.com/v1';
+  const base = (config.endpoint || fallback).replace(/\/$/, '');
+  const headers: Record<string, string> = {};
+  if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
+  const res = await fetch(`${base}/models`, { headers });
+  if (!res.ok) throw new LLMError(codeForStatus(res.status), await res.text());
+  const d = (await res.json()) as { data?: { id?: string }[] };
+  return (d.data ?? []).map((m) => m.id ?? '').filter(Boolean);
+}
+
+async function handleTestConnection(
+  msg: Extract<Msg, { kind: 'TEST_CONNECTION' }>,
+): Promise<Resp> {
+  const models = await listModels(msg.config);
+  return { ok: true, kind: 'TEST_CONNECTION', models };
+}
+
 async function handleParseResume(
   msg: Extract<Msg, { kind: 'PARSE_RESUME' }>,
 ): Promise<Resp> {
@@ -108,6 +150,8 @@ async function handle(msg: Msg): Promise<Resp> {
       return handleParseResume(msg);
     case 'RECORD_CORRECTIONS':
       return handleRecordCorrections(msg);
+    case 'TEST_CONNECTION':
+      return handleTestConnection(msg);
     default:
       return { ok: false, code: 'UNKNOWN', message: 'unknown message' };
   }

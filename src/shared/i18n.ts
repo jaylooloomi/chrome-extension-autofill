@@ -79,7 +79,12 @@ const EN: Dict = {
   pf_summary: 'Summary / cover blurb',
   fab_fill: 'AutoFill',
   ollama_note:
-    'Fill in your Ollama URL (default http://localhost:11434/v1). The API key can be left blank for the local daemon. For cloud models (e.g. minimax-m2.5:cloud) run `ollama signin` first. IMPORTANT: set OLLAMA_ORIGINS=* and restart Ollama, otherwise the request is blocked by CORS.',
+    'Ollama runs locally (default http://localhost:11434/v1); the API key is optional. Click "Test connection" to check it and load your models.',
+  test_conn: 'Test connection',
+  test_testing: 'Testing…',
+  test_ok: 'Connected',
+  ollama_fail_hint:
+    'check: 1) Ollama is running 2) OLLAMA_ORIGINS=* is set and Ollama restarted 3) for cloud models run `ollama signin`',
 };
 
 const ZH_TW: Dict = {
@@ -135,7 +140,12 @@ const ZH_TW: Dict = {
   pf_summary: '自我介紹',
   fab_fill: '自動填寫',
   ollama_note:
-    '填入你的 Ollama 網址(預設 http://localhost:11434/v1)。本機 daemon 的 API 金鑰可留空。雲端模型(如 minimax-m2.5:cloud)請先執行 `ollama signin`。重要:設定 OLLAMA_ORIGINS=* 並重啟 Ollama,否則請求會被 CORS 擋下。',
+    'Ollama 在本機執行(預設 http://localhost:11434/v1),API 金鑰可留空。按「測試連線」即可檢查並自動載入你的模型清單。',
+  test_conn: '測試連線',
+  test_testing: '測試中…',
+  test_ok: '已連線',
+  ollama_fail_hint:
+    '請檢查:1) Ollama 是否在執行 2) 是否已設定 OLLAMA_ORIGINS=* 並重啟 Ollama 3) 雲端模型請先執行 `ollama signin`',
 };
 
 const ZH_CN: Dict = {
@@ -191,7 +201,12 @@ const ZH_CN: Dict = {
   pf_summary: '自我介绍',
   fab_fill: '自动填写',
   ollama_note:
-    '填入你的 Ollama 网址(默认 http://localhost:11434/v1)。本机 daemon 的 API 密钥可留空。云端模型(如 minimax-m2.5:cloud)请先执行 `ollama signin`。重要:设置 OLLAMA_ORIGINS=* 并重启 Ollama,否则请求会被 CORS 拦截。',
+    'Ollama 在本机运行(默认 http://localhost:11434/v1),API 密钥可留空。点击「测试连接」即可检查并自动加载你的模型列表。',
+  test_conn: '测试连接',
+  test_testing: '测试中…',
+  test_ok: '已连接',
+  ollama_fail_hint:
+    '请检查:1) Ollama 是否在运行 2) 是否已设置 OLLAMA_ORIGINS=* 并重启 Ollama 3) 云端模型请先执行 `ollama signin`',
 };
 
 const JA: Dict = {
@@ -247,7 +262,12 @@ const JA: Dict = {
   pf_summary: '自己紹介',
   fab_fill: '自動入力',
   ollama_note:
-    'Ollama の URL を入力(デフォルト http://localhost:11434/v1)。ローカル daemon では API キーは空でも可。クラウドモデル(例: minimax-m2.5:cloud)は先に `ollama signin` を実行。重要: OLLAMA_ORIGINS=* を設定して Ollama を再起動してください。さもないと CORS でブロックされます。',
+    'Ollama はローカルで動作(デフォルト http://localhost:11434/v1)、API キーは任意。「接続テスト」を押すと確認してモデル一覧を読み込みます。',
+  test_conn: '接続テスト',
+  test_testing: 'テスト中…',
+  test_ok: '接続済み',
+  ollama_fail_hint:
+    '確認: 1) Ollama が起動中か 2) OLLAMA_ORIGINS=* を設定し Ollama を再起動したか 3) クラウドモデルは `ollama signin` を実行',
 };
 
 const MESSAGES: Record<Locale, Dict> = {

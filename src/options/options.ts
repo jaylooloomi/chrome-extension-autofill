@@ -189,20 +189,51 @@ async function init(): Promise<void> {
     if (!modelInput.value.trim()) modelInput.value = SUGGESTED_MODEL[p];
   });
 
-  $('save-api').addEventListener('click', async () => {
+  function formConfig(): ApiConfig {
     const provider = providerSel.value as ProviderName;
-    const next: ApiConfig = {
+    return {
       provider,
       model: modelInput.value.trim() || SUGGESTED_MODEL[provider],
       apiKey: ($('apiKey') as HTMLInputElement).value.trim(),
       endpoint: ($('endpoint') as HTMLInputElement).value.trim() || undefined,
     };
-    if (!next.apiKey && !keyOptional(provider)) {
+  }
+
+  $('save-api').addEventListener('click', async () => {
+    const next = formConfig();
+    if (!next.apiKey && !keyOptional(next.provider)) {
       status($('api-status'), t('popup_need_key', locale), false);
       return;
     }
     await setApiConfig(next);
     status($('api-status'), t('saved', locale));
+  });
+
+  // Test connection: confirm reachability and auto-load the model list.
+  $('test-conn').addEventListener('click', async () => {
+    const cfg = formConfig();
+    status($('api-status'), t('test_testing', locale));
+    const resp = await sendToBackground({ kind: 'TEST_CONNECTION', config: cfg });
+    if (!resp.ok) {
+      const hint = cfg.provider === 'ollama' ? ` — ${t('ollama_fail_hint', locale)}` : '';
+      status($('api-status'), `❌ ${resp.message}${hint}`, false);
+      return;
+    }
+    if (resp.kind !== 'TEST_CONNECTION') return;
+    const list = $('model-list') as HTMLDataListElement;
+    list.innerHTML = '';
+    for (const m of resp.models) {
+      const o = document.createElement('option');
+      o.value = m;
+      list.appendChild(o);
+    }
+    // Prefill the model if empty (prefer the suggested one if present).
+    if (!modelInput.value.trim() && resp.models.length) {
+      modelInput.value = resp.models.includes(SUGGESTED_MODEL[cfg.provider])
+        ? SUGGESTED_MODEL[cfg.provider]
+        : resp.models[0];
+    }
+    status($('api-status'), `✅ ${t('test_ok', locale)} · ${resp.models.length}`);
   });
 
   // Profile

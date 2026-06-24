@@ -33,7 +33,10 @@
               <option value="ollama">Ollama (local / cloud)</option>
             </select>
           </label>
-          <label><span data-i18n="model">Model</span> <input id="model" type="text" placeholder="model id" /></label>
+          <label><span data-i18n="model">Model</span>
+            <input id="model" type="text" placeholder="model id" list="model-list" autocomplete="off" />
+            <datalist id="model-list"></datalist>
+          </label>
         </div>
         <label><span data-i18n="api_key">API key</span> <span id="key-optional" class="note" data-i18n="key_optional" hidden>(optional for Ollama)</span>
           <input id="apiKey" type="password" placeholder="paste your key" />
@@ -48,7 +51,10 @@
           </label>
         </div>
         <p class="note" data-i18n="fill_language_hint">Language used when filling. Auto-detect uses the page language.</p>
-        <button id="save-api" class="primary" data-i18n="save_api">Save API settings</button>
+        <div class="row">
+          <button id="test-conn" data-i18n="test_conn">Test connection</button>
+          <button id="save-api" class="primary" data-i18n="save_api">Save API settings</button>
+        </div>
         <span id="api-status" class="status"></span>
       </section>
 
