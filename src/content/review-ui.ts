@@ -77,6 +77,7 @@ const HL_MANUAL = '2px dashed #f59e0b';
 
 export interface UIController {
   setBusy(busy: boolean): void;
+  setVisible(visible: boolean): void;
   toast(message: string): void;
   showReview(
     fields: FieldSchema[],
@@ -104,6 +105,7 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
   fab.className = 'fab';
   fab.textContent = opts.fillLabel;
   fab.title = 'Autofy';
+  fab.style.display = 'none'; // hidden until the page is known to have fields
 
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -210,6 +212,10 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
       busy = b;
       fab.disabled = b;
       fab.textContent = b ? '…' : opts.fillLabel;
+    },
+    setVisible(visible) {
+      fab.style.display = visible ? '' : 'none';
+      if (visible) schedulePlace();
     },
     toast(message) {
       toastEl.textContent = message;

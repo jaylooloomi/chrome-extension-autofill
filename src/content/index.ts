@@ -15,17 +15,24 @@ if (!(window as unknown as { __autofy?: boolean }).__autofy) {
   void bootstrap();
 }
 
+/** Visible fillable fields on the page (excludes hidden / zero-size). */
+function visibleFillable(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>('input, select, textarea, [contenteditable]'),
+  ).filter((el) => {
+    if (!isFillable(el)) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 || r.height > 0;
+  });
+}
+
 /** Top-left of the form region = top-left of the bounding box of all fillable
  *  fields. Works whether the form is a <form> or a plain <div>. */
 function formAnchor(): { left: number; top: number } | null {
-  const els = Array.from(
-    document.querySelectorAll<HTMLElement>('input, select, textarea, [contenteditable]'),
-  ).filter(isFillable);
   let minLeft = Infinity;
   let minTop = Infinity;
-  for (const el of els) {
+  for (const el of visibleFillable()) {
     const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) continue;
     minLeft = Math.min(minLeft, r.left);
     minTop = Math.min(minTop, r.top);
   }
@@ -50,6 +57,16 @@ async function bootstrap(): Promise<void> {
     },
     { fillLabel: t('fab_fill', locale), getAnchor: formAnchor },
   );
+
+  // Only show the button when the page actually has fillable fields. Re-check
+  // on DOM changes so SPA-rendered forms show it (and empty pages hide it).
+  const refreshVisibility = () => ui.setVisible(visibleFillable().length > 0);
+  refreshVisibility();
+  let debounce: ReturnType<typeof setTimeout> | undefined;
+  new MutationObserver(() => {
+    clearTimeout(debounce);
+    debounce = setTimeout(refreshVisibility, 500);
+  }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
 async function runFill(ui: UIController): Promise<void> {

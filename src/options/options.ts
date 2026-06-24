@@ -33,17 +33,6 @@ const KEY_HELP: Record<ProviderName, string> = {
   ollama: 'https://docs.ollama.com/cloud',
 };
 
-const PROVIDER_NOTE: Record<ProviderName, string> = {
-  gemini: '',
-  openai: '',
-  anthropic: '',
-  ollama:
-    'Fill in your Ollama URL (default http://localhost:11434/v1). API key can be ' +
-    'left blank for the local daemon. For cloud models (e.g. minimax-m2.5:cloud) ' +
-    'run `ollama signin` first. IMPORTANT: set OLLAMA_ORIGINS=* and restart Ollama, ' +
-    'otherwise the request is blocked by CORS.',
-};
-
 function keyOptional(provider: ProviderName): boolean {
   return provider === 'ollama';
 }
@@ -125,7 +114,7 @@ function mergeProfile(base: Profile, draft: Profile): Profile {
 
 function applyProviderUI(provider: ProviderName): void {
   ($('key-help') as HTMLAnchorElement).href = KEY_HELP[provider];
-  $('provider-note').textContent = PROVIDER_NOTE[provider];
+  $('provider-note').textContent = provider === 'ollama' ? t('ollama_note', locale) : '';
   ($('key-optional') as HTMLElement).hidden = !keyOptional(provider);
   const endpoint = $('endpoint') as HTMLInputElement;
   if (provider === 'ollama' && !endpoint.value.trim()) endpoint.value = OLLAMA_DEFAULT_ENDPOINT;
@@ -163,6 +152,7 @@ async function init(): Promise<void> {
     // Re-label the "Auto" option in the new locale.
     uiLang.options[0].textContent = t('auto', locale);
     applyI18n();
+    applyProviderUI(($('provider') as HTMLSelectElement).value as ProviderName);
     // Re-render profile field labels in the new locale (preserve edits).
     currentProfile = readProfileFromForm();
     renderProfileFields();

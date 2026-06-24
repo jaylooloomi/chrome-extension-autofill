@@ -78,6 +78,8 @@ const EN: Dict = {
   pf_portfolio: 'Portfolio URL',
   pf_summary: 'Summary / cover blurb',
   fab_fill: 'AutoFill',
+  ollama_note:
+    'Fill in your Ollama URL (default http://localhost:11434/v1). The API key can be left blank for the local daemon. For cloud models (e.g. minimax-m2.5:cloud) run `ollama signin` first. IMPORTANT: set OLLAMA_ORIGINS=* and restart Ollama, otherwise the request is blocked by CORS.',
 };
 
 const ZH_TW: Dict = {
@@ -132,6 +134,8 @@ const ZH_TW: Dict = {
   pf_portfolio: '作品集網址',
   pf_summary: '自我介紹',
   fab_fill: '自動填寫',
+  ollama_note:
+    '填入你的 Ollama 網址(預設 http://localhost:11434/v1)。本機 daemon 的 API 金鑰可留空。雲端模型(如 minimax-m2.5:cloud)請先執行 `ollama signin`。重要:設定 OLLAMA_ORIGINS=* 並重啟 Ollama,否則請求會被 CORS 擋下。',
 };
 
 const ZH_CN: Dict = {
@@ -186,6 +190,8 @@ const ZH_CN: Dict = {
   pf_portfolio: '作品集网址',
   pf_summary: '自我介绍',
   fab_fill: '自动填写',
+  ollama_note:
+    '填入你的 Ollama 网址(默认 http://localhost:11434/v1)。本机 daemon 的 API 密钥可留空。云端模型(如 minimax-m2.5:cloud)请先执行 `ollama signin`。重要:设置 OLLAMA_ORIGINS=* 并重启 Ollama,否则请求会被 CORS 拦截。',
 };
 
 const JA: Dict = {
@@ -240,6 +246,8 @@ const JA: Dict = {
   pf_portfolio: 'ポートフォリオ URL',
   pf_summary: '自己紹介',
   fab_fill: '自動入力',
+  ollama_note:
+    'Ollama の URL を入力(デフォルト http://localhost:11434/v1)。ローカル daemon では API キーは空でも可。クラウドモデル(例: minimax-m2.5:cloud)は先に `ollama signin` を実行。重要: OLLAMA_ORIGINS=* を設定して Ollama を再起動してください。さもないと CORS でブロックされます。',
 };
 
 const MESSAGES: Record<Locale, Dict> = {
