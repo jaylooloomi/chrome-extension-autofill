@@ -3,6 +3,7 @@
 import { getApiConfig, getProfile, getPrefs, setPrefs } from '../shared/storage';
 import { listProfilePaths } from '../shared/profile-schema';
 import { t, resolveLocale, type Locale } from '../shared/i18n';
+import { normalizeHost, isHostDisabled } from '../shared/site';
 
 const stateEl = document.getElementById('state') as HTMLParagraphElement;
 const toggleBtn = document.getElementById('toggle-site') as HTMLButtonElement;
@@ -24,7 +25,7 @@ async function currentSite(): Promise<{ host: string; ok: boolean }> {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url ?? '';
     if (!/^https?:/i.test(url)) return { host: '', ok: false };
-    return { host: new URL(url).hostname, ok: true };
+    return { host: normalizeHost(new URL(url).hostname), ok: true };
   } catch {
     return { host: '', ok: false };
   }
@@ -54,13 +55,14 @@ async function refresh(): Promise<void> {
     toggleBtn.hidden = true;
     return;
   }
-  const disabled = prefs.disabledSites.includes(host);
+  const disabled = isHostDisabled(host, prefs.disabledSites);
   toggleBtn.hidden = false;
   toggleBtn.title = host;
   toggleBtn.textContent = disabled ? t('popup_enable_site', locale) : t('popup_disable_site', locale);
   toggleBtn.onclick = async () => {
     const p = await getPrefs();
-    const set = new Set(p.disabledSites);
+    // Normalize the whole list so old www-prefixed entries match too.
+    const set = new Set(p.disabledSites.map(normalizeHost));
     if (set.has(host)) set.delete(host);
     else set.add(host);
     p.disabledSites = [...set];

@@ -8,6 +8,7 @@ import { fillFields } from './fill-engine';
 import { sendToBackground } from '../shared/messages';
 import { getPrefs } from '../shared/storage';
 import { resolveLocale, t, type Locale } from '../shared/i18n';
+import { isHostDisabled } from '../shared/site';
 import { mountUI, type Anchor, type ReviewContext, type UIController } from './review-ui';
 
 if (!(window as unknown as { __autofy?: boolean }).__autofy) {
@@ -58,7 +59,7 @@ async function bootstrap(): Promise<void> {
   );
 
   // Per-site disable: hide the button entirely on hostnames the user opted out.
-  let siteDisabled = (prefs.disabledSites ?? []).includes(location.hostname);
+  let siteDisabled = isHostDisabled(location.hostname, prefs.disabledSites ?? []);
 
   // Re-detect the submit button + field presence on load and on DOM changes.
   function refresh(): void {
@@ -87,7 +88,7 @@ async function bootstrap(): Promise<void> {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.prefs) return;
     const next = changes.prefs.newValue as { disabledSites?: string[] } | undefined;
-    siteDisabled = (next?.disabledSites ?? []).includes(location.hostname);
+    siteDisabled = isHostDisabled(location.hostname, next?.disabledSites ?? []);
     refresh();
   });
 }
