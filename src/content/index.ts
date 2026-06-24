@@ -7,7 +7,7 @@ import { resolve } from './refs';
 import { fillFields } from './fill-engine';
 import { sendToBackground } from '../shared/messages';
 import { getPrefs } from '../shared/storage';
-import { resolveLocale, t } from '../shared/i18n';
+import { resolveLocale, t, type Locale } from '../shared/i18n';
 import { mountUI, type Anchor, type ReviewContext, type UIController } from './review-ui';
 
 if (!(window as unknown as { __autofy?: boolean }).__autofy) {
@@ -44,7 +44,7 @@ async function bootstrap(): Promise<void> {
 
   const ui: UIController = mountUI(
     {
-      onFill: () => void runFill(ui),
+      onFill: () => void runFill(ui, locale),
       onConfirm: (values, ctx) => {
         void sendToBackground({
           kind: 'RECORD_CORRECTIONS',
@@ -54,7 +54,7 @@ async function bootstrap(): Promise<void> {
         });
       },
     },
-    { fillLabel: t('fab_fill', locale), getFieldAnchor: fieldAnchor },
+    { fillLabel: t('fab_fill', locale), locale, getFieldAnchor: fieldAnchor },
   );
 
   // Per-site disable: hide the button entirely on hostnames the user opted out.
@@ -82,12 +82,12 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-async function runFill(ui: UIController): Promise<void> {
+async function runFill(ui: UIController, locale: Locale): Promise<void> {
   const t0 = performance.now();
   const { fields, formSignature } = scanFields(document);
   const tScan = performance.now();
   if (fields.length === 0) {
-    ui.toast('Autofy: no fillable fields found here.');
+    ui.toast(t('toast_no_fields', locale));
     return;
   }
   ui.setBusy(true);
@@ -123,6 +123,6 @@ async function runFill(ui: UIController): Promise<void> {
     sample: resp.sample,
   });
 
-  if (resp.sample) ui.toast('Filled (gaps use AI sample data) — review before submitting.');
-  else if (resp.fromCache) ui.toast('Filled from cache (no AI call).');
+  if (resp.sample) ui.toast(t('toast_sample_filled', locale));
+  else if (resp.fromCache) ui.toast(t('toast_cache_filled', locale));
 }

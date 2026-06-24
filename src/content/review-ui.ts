@@ -10,6 +10,7 @@
 
 import type { FieldSchema, FillResult, MappingResponse } from '../shared/types';
 import { fillElement } from './fill-engine';
+import { t, type Locale } from '../shared/i18n';
 
 export interface ReviewContext {
   domain: string;
@@ -30,6 +31,8 @@ export interface UIHandlers {
 export interface UIOptions {
   /** Localized label for the Fill button (e.g. "AutoFill" / "自動填寫"). */
   fillLabel: string;
+  /** UI locale for the review panel strings. */
+  locale: Locale;
   /** Field-region top-left for positioning the floating FAB, or null. */
   getFieldAnchor?: () => Anchor | null;
 }
@@ -284,13 +287,15 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
       const status = new Map(results.map((r) => [r.ref, r]));
       panel.innerHTML = '';
 
+      const L = opts.locale;
       const head = document.createElement('div');
       head.className = 'head';
       const filledCount = results.filter((r) => r.status === 'filled').length;
+      const count = `${filledCount}/${fields.length} ${t('rv_filled_word', L)}`;
       const sub = sample
-        ? `⚠ includes AI sample data · ${filledCount}/${fields.length} filled · review before submitting`
-        : `${filledCount}/${fields.length} filled · nothing is sent automatically`;
-      head.innerHTML = `<span>Review &amp; submit<br><span class="sub">${sub}</span></span>`;
+        ? `${t('rv_sample', L)} · ${count} · ${t('rv_review_before', L)}`
+        : `${count} · ${t('rv_nothing_auto', L)}`;
+      head.innerHTML = `<span>${escapeHtml(t('rv_title', L))}<br><span class="sub">${escapeHtml(sub)}</span></span>`;
       panel.appendChild(head);
 
       const rows = document.createElement('div');
@@ -315,11 +320,11 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
         const lbl = document.createElement('div');
         lbl.className = 'lbl';
         const badgeClass = manual ? 'manual' : st;
-        const badgeText = manual ? 'manual ✋' : st;
-        lbl.innerHTML = `<span>${escapeHtml(labelFor(f))}</span><span class="badge ${badgeClass}">${badgeText}</span>`;
+        const badgeText = manual ? t('bd_manual', L) : t(`bd_${st}`, L);
+        lbl.innerHTML = `<span>${escapeHtml(labelFor(f))}</span><span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
         const input = document.createElement('input');
         input.value = map[f.ref] ?? '';
-        if (manual) input.placeholder = 'enter this yourself (e.g. captcha)';
+        if (manual) input.placeholder = t('rv_manual_ph', L);
         row.append(lbl, input);
         rows.appendChild(row);
         inputs.push({ field: f, input });
@@ -330,10 +335,10 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
       foot.className = 'foot';
       const confirm = document.createElement('button');
       confirm.className = 'confirm';
-      confirm.textContent = 'Apply edits & remember';
+      confirm.textContent = t('rv_confirm', L);
       const close = document.createElement('button');
       close.className = 'close';
-      close.textContent = 'Close';
+      close.textContent = t('rv_close', L);
       foot.append(confirm, close);
       panel.appendChild(foot);
       panel.classList.add('open');
@@ -354,7 +359,7 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
         handlers.onConfirm(values, ctx);
         panel.classList.remove('open');
         clearHighlights(resolve, refs);
-        controller.toast('Saved. Autofy will remember this form.');
+        controller.toast(t('toast_saved', opts.locale));
       });
     },
   };
