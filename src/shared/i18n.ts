@@ -85,6 +85,9 @@ const EN: Dict = {
   test_ok: 'Connected',
   ollama_fail_hint:
     'check: 1) Ollama is running 2) OLLAMA_ORIGINS=* is set and Ollama restarted 3) for cloud models run `ollama signin`',
+  resume_parsing: 'Drafting with AI… (may take 10–30s)',
+  resume_drafted: 'Draft ready — review below and Save profile',
+  resume_empty: 'Paste or import some resume text first',
 };
 
 const ZH_TW: Dict = {
@@ -146,6 +149,9 @@ const ZH_TW: Dict = {
   test_ok: '已連線',
   ollama_fail_hint:
     '請檢查:1) Ollama 是否在執行 2) 是否已設定 OLLAMA_ORIGINS=* 並重啟 Ollama 3) 雲端模型請先執行 `ollama signin`',
+  resume_parsing: 'AI 解析中…(可能需 10–30 秒)',
+  resume_drafted: '已草擬 — 請檢視下方並按「儲存個人檔案」',
+  resume_empty: '請先貼上或匯入履歷文字',
 };
 
 const ZH_CN: Dict = {
@@ -207,6 +213,9 @@ const ZH_CN: Dict = {
   test_ok: '已连接',
   ollama_fail_hint:
     '请检查:1) Ollama 是否在运行 2) 是否已设置 OLLAMA_ORIGINS=* 并重启 Ollama 3) 云端模型请先执行 `ollama signin`',
+  resume_parsing: 'AI 解析中…(可能需 10–30 秒)',
+  resume_drafted: '已起草 — 请查看下方并点「保存个人资料」',
+  resume_empty: '请先粘贴或导入简历文本',
 };
 
 const JA: Dict = {
@@ -268,6 +277,9 @@ const JA: Dict = {
   test_ok: '接続済み',
   ollama_fail_hint:
     '確認: 1) Ollama が起動中か 2) OLLAMA_ORIGINS=* を設定し Ollama を再起動したか 3) クラウドモデルは `ollama signin` を実行',
+  resume_parsing: 'AI で解析中…(10〜30 秒かかる場合あり)',
+  resume_drafted: '下書き完了 — 下で確認して保存',
+  resume_empty: '先に履歴書テキストを貼るか取り込んでください',
 };
 
 const MESSAGES: Record<Locale, Dict> = {

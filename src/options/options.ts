@@ -130,20 +130,43 @@ function applyProviderUI(provider: ProviderName): void {
 }
 
 async function draftFromResume(text: string): Promise<void> {
+  const statusEl = $('resume-status');
+  const btn = $('parse-resume') as HTMLButtonElement;
+  const importBtn = $('import-resume') as HTMLButtonElement;
   if (!text.trim()) {
-    status($('resume-status'), t('resume_placeholder', locale), false);
+    status(statusEl, t('resume_empty', locale), false);
     return;
   }
-  status($('resume-status'), '…');
-  const resp = await sendToBackground({ kind: 'PARSE_RESUME', text });
-  if (!resp.ok) {
-    status($('resume-status'), `Error: ${resp.message}`, false);
-    return;
+  // Persistent loading state — the LLM can take 10-30s (esp. thinking models),
+  // so don't let the message auto-clear or the button look idle.
+  btn.disabled = true;
+  importBtn.disabled = true;
+  btn.textContent = '…';
+  statusEl.textContent = t('resume_parsing', locale);
+  statusEl.className = 'status';
+  console.info('[Autofy] PARSE_RESUME start —', text.length, 'chars');
+  const started = Date.now();
+  try {
+    const resp = await sendToBackground({ kind: 'PARSE_RESUME', text });
+    console.info('[Autofy] PARSE_RESUME done in', Date.now() - started, 'ms', resp.ok ? 'ok' : resp);
+    if (!resp.ok) {
+      statusEl.textContent = `❌ ${resp.message}`;
+      statusEl.className = 'status err';
+      return;
+    }
+    if (resp.kind !== 'PARSE_RESUME') return;
+    currentProfile = mergeProfile(readProfileFromForm(), resp.profile);
+    renderProfileFields();
+    status(statusEl, `✅ ${t('resume_drafted', locale)}`);
+  } catch (e) {
+    console.error('[Autofy] PARSE_RESUME threw:', e);
+    statusEl.textContent = `❌ ${String(e)}`;
+    statusEl.className = 'status err';
+  } finally {
+    btn.disabled = false;
+    importBtn.disabled = false;
+    btn.textContent = t('draft_profile', locale);
   }
-  if (resp.kind !== 'PARSE_RESUME') return;
-  currentProfile = mergeProfile(readProfileFromForm(), resp.profile);
-  renderProfileFields();
-  status($('resume-status'), t('saved', locale));
 }
 
 async function init(): Promise<void> {
