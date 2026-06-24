@@ -90,6 +90,8 @@ const HL_MANUAL = '2px dashed #f59e0b';
 export interface UIController {
   setBusy(busy: boolean): void;
   setVisible(visible: boolean): void;
+  /** Tear down all DOM + listeners (e.g. when the extension context dies). */
+  destroy(): void;
   /** Pass the detected submit button (inline mode) or null (floating mode). */
   setSubmitTarget(el: HTMLElement | null): void;
   toast(message: string): void;
@@ -272,6 +274,13 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
     setVisible(v) {
       visible = v;
       render();
+    },
+    destroy() {
+      window.removeEventListener('scroll', scheduleFloat, true);
+      window.removeEventListener('resize', scheduleFloat);
+      if (toastTimer) clearTimeout(toastTimer);
+      mainHost.remove();
+      inlineHost.remove();
     },
     setSubmitTarget(el) {
       submitEl = el;

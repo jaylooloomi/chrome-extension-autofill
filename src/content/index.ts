@@ -73,6 +73,16 @@ async function bootstrap(): Promise<void> {
     debounce = setTimeout(refresh, 500);
   }).observe(document.documentElement, { childList: true, subtree: true });
 
+  // Watchdog: if the extension is reloaded/updated, this content script is
+  // orphaned (chrome.runtime.id becomes undefined). Remove the stale button so
+  // it doesn't linger uselessly until the user refreshes.
+  const watchdog = setInterval(() => {
+    if (!chrome.runtime?.id) {
+      clearInterval(watchdog);
+      ui.destroy();
+    }
+  }, 2000);
+
   // React live when the user toggles this site in the popup (no reload needed).
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.prefs) return;
@@ -102,6 +112,11 @@ async function runFill(ui: UIController, locale: Locale): Promise<void> {
   ui.setBusy(false);
 
   if (!resp.ok) {
+    if (resp.code === 'CONTEXT_INVALIDATED') {
+      ui.setVisible(false); // the orphaned button is useless — hide it
+      ui.toast(t('toast_updated_reload', locale));
+      return;
+    }
     console.warn('[Autofy] MAP_FIELDS failed:', resp.code, resp.message, `(${Math.round(tResp - tScan)}ms)`);
     ui.toast(`Autofy: ${resp.message}`);
     return;
