@@ -24,6 +24,14 @@ describe('detector', () => {
     expect(getLabel(document.getElementById('n') as HTMLElement)).toBe('Full Name');
   });
 
+  it('reads a label from a preceding sibling div (no <label> tag)', () => {
+    setBody(`
+      <div class="box"><div><span>*</span>企業名稱</div>
+        <input id="company_name" placeholder="請輸入企業名稱"></div>
+    `);
+    expect(getLabel(document.getElementById('company_name') as HTMLElement)).toBe('企業名稱');
+  });
+
   it('extracts a schema for standard inputs and skips hidden/submit', () => {
     setBody(`
       <input type="text" name="first" placeholder="First">

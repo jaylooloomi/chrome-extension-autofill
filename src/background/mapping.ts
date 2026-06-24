@@ -95,11 +95,23 @@ export async function mapFields(
   const prompt = buildMappingPrompt(req, fake, language);
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
+    const t = Date.now();
     try {
       const raw = await provider.complete({ prompt, signal });
+      // Per-attempt latency: this is the raw LLM round-trip. A second line here
+      // means attempt 1 failed to parse and we silently retried — that DOUBLES
+      // the user-visible wait, so it's a prime "why is it slow" suspect.
+      console.info(
+        `[Autofy map] LLM attempt ${attempt + 1}: ${Date.now() - t}ms ` +
+          `(prompt ${prompt.length} chars, ${req.fields.length} fields)`,
+      );
       return validateMapping(raw, req.fields);
     } catch (err) {
       lastErr = err;
+      console.warn(
+        `[Autofy map] LLM attempt ${attempt + 1} failed after ${Date.now() - t}ms:`,
+        err instanceof LLMError ? `${err.code} ${err.message}` : String(err),
+      );
       if (err instanceof LLMError && err.code !== 'PARSE') throw err; // don't retry auth/rate
     }
   }

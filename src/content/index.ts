@@ -2,7 +2,7 @@
 // page and runs the scan -> map -> fill -> review flow (spec §6). Heavy work
 // only happens on click.
 
-import { scanFields } from './detector';
+import { scanFields, isFillable } from './detector';
 import { resolve } from './refs';
 import { fillFields } from './fill-engine';
 import { sendToBackground } from '../shared/messages';
@@ -13,6 +13,23 @@ import { mountUI, type ReviewContext, type UIController } from './review-ui';
 if (!(window as unknown as { __autofy?: boolean }).__autofy) {
   (window as unknown as { __autofy?: boolean }).__autofy = true;
   void bootstrap();
+}
+
+/** Top-left of the form region = top-left of the bounding box of all fillable
+ *  fields. Works whether the form is a <form> or a plain <div>. */
+function formAnchor(): { left: number; top: number } | null {
+  const els = Array.from(
+    document.querySelectorAll<HTMLElement>('input, select, textarea, [contenteditable]'),
+  ).filter(isFillable);
+  let minLeft = Infinity;
+  let minTop = Infinity;
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    minLeft = Math.min(minLeft, r.left);
+    minTop = Math.min(minTop, r.top);
+  }
+  return Number.isFinite(minLeft) ? { left: minLeft, top: minTop } : null;
 }
 
 async function bootstrap(): Promise<void> {
@@ -31,7 +48,7 @@ async function bootstrap(): Promise<void> {
         });
       },
     },
-    { fillLabel: t('fab_fill', locale) },
+    { fillLabel: t('fab_fill', locale), getAnchor: formAnchor },
   );
 }
 

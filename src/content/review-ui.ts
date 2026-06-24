@@ -1,8 +1,12 @@
-// Floating, draggable Fill button + pre-submit review panel (spec §4.4, §5.3).
-// Rendered inside a Shadow DOM so host-page CSS cannot break it. The button
-// floats, can be dragged anywhere, and remembers its position. The panel NEVER
-// submits — it highlights, lists, and lets the user edit; captcha fields are
-// flagged "manual" and left blank.
+// Floating Fill button + pre-submit review panel (spec §4.4, §5.3).
+// Rendered inside a Shadow DOM so host-page CSS cannot break it.
+//
+// Placement: by default the button anchors to the TOP-LEFT of the form region
+// (the bounding box of all fillable fields — works whether the container is a
+// <form> or a plain <div>) and follows it on scroll. The user can drag it
+// anywhere for the rest of the page session. The panel NEVER submits — it
+// highlights, lists, and lets the user edit; captcha fields are flagged
+// "manual" and left blank.
 
 import type { FieldSchema, FillResult, MappingResponse } from '../shared/types';
 import { fillElement } from './fill-engine';
@@ -20,14 +24,14 @@ export interface UIHandlers {
 export interface UIOptions {
   /** Localized label for the Fill button (e.g. "AutoFill" / "自動填寫"). */
   fillLabel: string;
+  /** Top-left of the form region in viewport coords, or null for no anchor. */
+  getAnchor?: () => { left: number; top: number } | null;
 }
-
-const POS_KEY = 'autofyFabPos';
 
 const STYLES = `
 :host { all: initial; }
 .fab {
-  position: fixed; right: 20px; bottom: 20px; z-index: 2147483646;
+  position: fixed; left: 20px; top: 20px; z-index: 2147483646;
   padding: 11px 20px; border-radius: 24px; border: none; cursor: grab;
   background: #4f46e5; color: #fff; font: 600 14px/1 system-ui, sans-serif;
   box-shadow: 0 6px 20px rgba(79,70,229,.45); white-space: nowrap;
@@ -111,26 +115,47 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
   let busy = false;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // ---- drag + position persistence ----
-  function applyPos(left: number, top: number) {
-    const w = fab.offsetWidth || 90;
+  // ---- placement: anchor to form top-left by default; drag overrides ----
+  let customPos: { left: number; top: number } | null = null;
+
+  function place(): void {
+    const w = fab.offsetWidth || 100;
     const h = fab.offsetHeight || 40;
-    const x = Math.min(window.innerWidth - w - 4, Math.max(4, left));
-    const y = Math.min(window.innerHeight - h - 4, Math.max(4, top));
-    fab.style.left = `${x}px`;
-    fab.style.top = `${y}px`;
-    fab.style.right = 'auto';
-    fab.style.bottom = 'auto';
-  }
-  try {
-    chrome.storage?.local.get(POS_KEY).then((o) => {
-      const p = o?.[POS_KEY] as { left: number; top: number } | undefined;
-      if (p) applyPos(p.left, p.top);
-    });
-  } catch {
-    /* storage unavailable on this page — keep default corner */
+    let left: number;
+    let top: number;
+    if (customPos) {
+      ({ left, top } = customPos);
+    } else {
+      const a = opts.getAnchor?.() ?? null;
+      if (a) {
+        left = a.left; // align to the form's left edge
+        top = a.top - h - 10; // sit just above the first field
+      } else {
+        left = window.innerWidth - w - 20; // fallback: bottom-right
+        top = window.innerHeight - h - 20;
+      }
+    }
+    left = Math.min(window.innerWidth - w - 4, Math.max(4, left));
+    top = Math.min(window.innerHeight - h - 4, Math.max(4, top));
+    fab.style.left = `${Math.round(left)}px`;
+    fab.style.top = `${Math.round(top)}px`;
   }
 
+  let rafScheduled = false;
+  function schedulePlace(): void {
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(() => {
+      rafScheduled = false;
+      place();
+    });
+  }
+  // Initial placement after layout settles, then follow scroll/resize.
+  requestAnimationFrame(place);
+  window.addEventListener('scroll', schedulePlace, { passive: true, capture: true });
+  window.addEventListener('resize', schedulePlace, { passive: true });
+
+  // ---- drag ----
   let dragging = false;
   let moved = false;
   let startX = 0;
@@ -155,8 +180,11 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
     if (!dragging) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
-    applyPos(originLeft + dx, originTop + dy);
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      moved = true;
+      customPos = { left: originLeft + dx, top: originTop + dy };
+      place();
+    }
   });
   fab.addEventListener('pointerup', (e) => {
     if (!dragging) return;
@@ -167,17 +195,7 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
     } catch {
       /* ignore */
     }
-    if (moved) {
-      try {
-        chrome.storage?.local.set({
-          [POS_KEY]: { left: parseFloat(fab.style.left), top: parseFloat(fab.style.top) },
-        });
-      } catch {
-        /* ignore */
-      }
-    } else {
-      handlers.onFill();
-    }
+    if (!moved) handlers.onFill();
   });
 
   function clearHighlights(resolve: (ref: string) => Element | undefined, refs: string[]) {

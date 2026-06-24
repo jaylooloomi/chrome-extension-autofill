@@ -69,6 +69,14 @@ export function getLabel(el: HTMLElement): string | undefined {
     const t = textOf(clone);
     if (t) return t;
   }
+
+  // Fallback for the common <div>Label</div><input> pattern (no <label> tag):
+  // use the immediately preceding non-control sibling's short text.
+  const prev = el.previousElementSibling;
+  if (prev && !/^(input|select|textarea|label)$/i.test(prev.tagName)) {
+    const t = textOf(prev)?.replace(/^[*\s]+/, '');
+    if (t && t.length <= 40) return t;
+  }
   return undefined;
 }
 
