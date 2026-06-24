@@ -1,6 +1,6 @@
-// Content script bootstrap: a Fill button anchored next to the form's submit
-// button when one is detected (else above the field region, else floating),
-// driving the scan -> map -> fill -> review flow (spec §6).
+// Content script bootstrap: injects a Fill button beside the form's submit
+// button when one is detected (in-flow, scrolls with the page), or a floating
+// draggable button otherwise. Drives scan -> map -> fill -> review (spec §6).
 
 import { scanFields, isFillable, findSubmitButton } from './detector';
 import { resolve } from './refs';
@@ -26,32 +26,21 @@ function visibleFillable(): HTMLElement[] {
   });
 }
 
+/** Top-left of the bounding box of all fillable fields (for the floating FAB). */
+function fieldAnchor(): Anchor | null {
+  let minLeft = Infinity;
+  let minTop = Infinity;
+  for (const el of visibleFillable()) {
+    const r = el.getBoundingClientRect();
+    minLeft = Math.min(minLeft, r.left);
+    minTop = Math.min(minTop, r.top);
+  }
+  return Number.isFinite(minLeft) ? { left: minLeft, top: minTop } : null;
+}
+
 async function bootstrap(): Promise<void> {
   const prefs = await getPrefs();
   const locale = resolveLocale(prefs.uiLanguage);
-
-  // Cached anchor target (the form's submit button), refreshed on DOM changes
-  // rather than recomputed every scroll frame.
-  let submitEl: HTMLElement | null = findSubmitButton(document);
-
-  function getAnchor(): Anchor | null {
-    if (submitEl?.isConnected) {
-      const r = submitEl.getBoundingClientRect();
-      if (r.width > 0 || r.height > 0) {
-        return { rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, place: 'left' };
-      }
-    }
-    // Fallback: top-left of the bounding box of all fillable fields.
-    let minLeft = Infinity;
-    let minTop = Infinity;
-    for (const el of visibleFillable()) {
-      const r = el.getBoundingClientRect();
-      minLeft = Math.min(minLeft, r.left);
-      minTop = Math.min(minTop, r.top);
-    }
-    if (!Number.isFinite(minLeft)) return null;
-    return { rect: { left: minLeft, top: minTop, right: minLeft, bottom: minTop }, place: 'above' };
-  }
 
   const ui: UIController = mountUI(
     {
@@ -65,14 +54,14 @@ async function bootstrap(): Promise<void> {
         });
       },
     },
-    { fillLabel: t('fab_fill', locale), getAnchor },
+    { fillLabel: t('fab_fill', locale), getFieldAnchor: fieldAnchor },
   );
 
-  // Show the button only when there are fillable fields; re-detect the submit
-  // button and visibility on DOM changes (SPA-rendered forms).
+  // Re-detect the submit button + field presence on load and on DOM changes.
   function refresh(): void {
-    submitEl = findSubmitButton(document);
-    ui.setVisible(visibleFillable().length > 0);
+    const hasFields = visibleFillable().length > 0;
+    ui.setVisible(hasFields);
+    ui.setSubmitTarget(hasFields ? findSubmitButton(document) : null);
   }
   refresh();
   let debounce: ReturnType<typeof setTimeout> | undefined;

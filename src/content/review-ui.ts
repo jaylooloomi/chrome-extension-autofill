@@ -1,12 +1,12 @@
-// Floating Fill button + pre-submit review panel (spec §4.4, §5.3).
-// Rendered inside a Shadow DOM so host-page CSS cannot break it.
+// Fill button + pre-submit review panel (spec §4.4, §5.3).
 //
-// Placement: by default the button anchors to the TOP-LEFT of the form region
-// (the bounding box of all fillable fields — works whether the container is a
-// <form> or a plain <div>) and follows it on scroll. The user can drag it
-// anywhere for the rest of the page session. The panel NEVER submits — it
-// highlights, lists, and lets the user edit; captcha fields are flagged
-// "manual" and left blank.
+// Two button modes:
+//  - inline: when a submit button is detected, a real in-flow button is injected
+//    next to it (its own Shadow DOM keeps styling isolated). It scrolls with the
+//    page like part of the form — not a floating overlay.
+//  - floating: fallback when no submit button is found — a fixed, draggable FAB.
+// The review panel + toast are always fixed overlays in a top-level host.
+// The panel NEVER submits; captcha fields are flagged "manual" and left blank.
 
 import type { FieldSchema, FillResult, MappingResponse } from '../shared/types';
 import { fillElement } from './fill-engine';
@@ -16,37 +16,39 @@ export interface ReviewContext {
   formSignature: string;
 }
 
+/** Top-left of the form's field region (viewport coords) for the floating FAB. */
+export interface Anchor {
+  left: number;
+  top: number;
+}
+
 export interface UIHandlers {
   onFill(): void;
   onConfirm(values: Record<string, string | null>, ctx: ReviewContext): void;
 }
 
-/** Where to anchor the Fill button. `place: 'left'` sits it beside (left of) a
- *  submit button; `'above'` sits it above the top-left of the form region. */
-export interface Anchor {
-  rect: { left: number; top: number; right: number; bottom: number };
-  place: 'left' | 'above';
-}
-
 export interface UIOptions {
   /** Localized label for the Fill button (e.g. "AutoFill" / "自動填寫"). */
   fillLabel: string;
-  /** Where to anchor the button this frame, or null for floating. */
-  getAnchor?: () => Anchor | null;
+  /** Field-region top-left for positioning the floating FAB, or null. */
+  getFieldAnchor?: () => Anchor | null;
 }
 
 const STYLES = `
 :host { all: initial; }
 .fab {
-  position: fixed; left: 20px; top: 20px; z-index: 2147483646;
-  padding: 11px 20px; border-radius: 24px; border: none; cursor: grab;
+  border: none; cursor: pointer; padding: 11px 20px; border-radius: 24px;
   background: #4f46e5; color: #fff; font: 600 14px/1 system-ui, sans-serif;
-  box-shadow: 0 6px 20px rgba(79,70,229,.45); white-space: nowrap;
-  touch-action: none; user-select: none;
+  white-space: nowrap; user-select: none;
 }
 .fab:hover { filter: brightness(1.05); }
-.fab.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(79,70,229,.55); }
 .fab[disabled] { opacity: .7; cursor: default; }
+.fab.floating {
+  position: fixed; left: 20px; top: 20px; z-index: 2147483646;
+  cursor: grab; touch-action: none; box-shadow: 0 6px 20px rgba(79,70,229,.45);
+}
+.fab.floating.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(79,70,229,.55); }
+.fab.inline { box-shadow: 0 2px 8px rgba(79,70,229,.35); vertical-align: middle; }
 .panel {
   position: fixed; right: 20px; bottom: 84px; z-index: 2147483647;
   width: 340px; max-height: 70vh; display: none; flex-direction: column;
@@ -85,6 +87,8 @@ const HL_MANUAL = '2px dashed #f59e0b';
 export interface UIController {
   setBusy(busy: boolean): void;
   setVisible(visible: boolean): void;
+  /** Pass the detected submit button (inline mode) or null (floating mode). */
+  setSubmitTarget(el: HTMLElement | null): void;
   toast(message: string): void;
   showReview(
     fields: FieldSchema[],
@@ -100,121 +104,155 @@ function labelFor(f: FieldSchema): string {
   return f.label || f.name || f.placeholder || f.id || f.ref;
 }
 
-export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
-  const host = document.createElement('div');
-  host.id = 'autofy-root';
+function shadowWithStyles(host: HTMLElement): ShadowRoot {
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = STYLES;
   shadow.appendChild(style);
+  return shadow;
+}
 
-  const fab = document.createElement('button');
-  fab.className = 'fab';
-  fab.textContent = opts.fillLabel;
-  fab.title = 'Autofy';
-  fab.style.display = 'none'; // hidden until the page is known to have fields
+export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
+  let busy = false;
+  let visible = false;
+  let submitEl: HTMLElement | null = null;
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
+  // Top-level host: panel + toast (fixed overlays) + the floating FAB.
+  const mainHost = document.createElement('div');
+  mainHost.id = 'autofy-root';
+  const mainShadow = shadowWithStyles(mainHost);
+  const floatingFab = makeFab('floating');
   const panel = document.createElement('div');
   panel.className = 'panel';
   const toastEl = document.createElement('div');
   toastEl.className = 'toast';
-  shadow.append(fab, panel, toastEl);
-  (document.documentElement || document.body).appendChild(host);
+  mainShadow.append(floatingFab, panel, toastEl);
+  (document.documentElement || document.body).appendChild(mainHost);
 
-  let busy = false;
-  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  // Inline host: injected into the page next to the submit button on demand.
+  const inlineHost = document.createElement('span');
+  inlineHost.id = 'autofy-inline';
+  inlineHost.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 8px;';
+  const inlineShadow = shadowWithStyles(inlineHost);
+  const inlineFab = makeFab('inline');
+  inlineShadow.appendChild(inlineFab);
 
-  // ---- placement: anchor to form top-left by default; drag overrides ----
-  let customPos: { left: number; top: number } | null = null;
-
-  function place(): void {
-    const w = fab.offsetWidth || 100;
-    const h = fab.offsetHeight || 40;
-    let left: number;
-    let top: number;
-    if (customPos) {
-      ({ left, top } = customPos);
-    } else {
-      const a = opts.getAnchor?.() ?? null;
-      if (a && a.place === 'left' && a.rect.left - w - 8 >= 4) {
-        // Beside the submit button, vertically centered.
-        left = a.rect.left - w - 8;
-        top = a.rect.top + (a.rect.bottom - a.rect.top - h) / 2;
-      } else if (a && a.place === 'left') {
-        // No room to the left → just above the submit button.
-        left = a.rect.left;
-        top = a.rect.top - h - 8;
-      } else if (a) {
-        // Above the top-left of the form region.
-        left = a.rect.left;
-        top = a.rect.top - h - 10;
-      } else {
-        left = window.innerWidth - w - 20; // floating fallback: bottom-right
-        top = window.innerHeight - h - 20;
-      }
+  function makeFab(kind: 'floating' | 'inline'): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = `fab ${kind}`;
+    btn.textContent = opts.fillLabel;
+    btn.title = 'Autofy';
+    if (kind === 'inline') {
+      btn.addEventListener('click', () => {
+        if (!busy) handlers.onFill();
+      });
     }
-    left = Math.min(window.innerWidth - w - 4, Math.max(4, left));
-    top = Math.min(window.innerHeight - h - 4, Math.max(4, top));
-    fab.style.left = `${Math.round(left)}px`;
-    fab.style.top = `${Math.round(top)}px`;
+    return btn;
   }
 
-  let rafScheduled = false;
-  function schedulePlace(): void {
-    if (rafScheduled) return;
-    rafScheduled = true;
+  function setLabel(): void {
+    const text = busy ? '…' : opts.fillLabel;
+    floatingFab.textContent = text;
+    inlineFab.textContent = text;
+    floatingFab.disabled = busy;
+    inlineFab.disabled = busy;
+  }
+
+  // ---- floating placement + drag ----
+  function placeFloating(): void {
+    if (customPos) {
+      applyXY(customPos.left, customPos.top);
+      return;
+    }
+    const a = opts.getFieldAnchor?.() ?? null;
+    const w = floatingFab.offsetWidth || 100;
+    const h = floatingFab.offsetHeight || 40;
+    if (a) applyXY(a.left, a.top - h - 10);
+    else applyXY(window.innerWidth - w - 20, window.innerHeight - h - 20);
+  }
+  function applyXY(left: number, top: number): void {
+    const w = floatingFab.offsetWidth || 100;
+    const h = floatingFab.offsetHeight || 40;
+    const x = Math.min(window.innerWidth - w - 4, Math.max(4, left));
+    const y = Math.min(window.innerHeight - h - 4, Math.max(4, top));
+    floatingFab.style.left = `${Math.round(x)}px`;
+    floatingFab.style.top = `${Math.round(y)}px`;
+  }
+  let raf = false;
+  function scheduleFloat(): void {
+    if (raf || floatingFab.style.display === 'none') return;
+    raf = true;
     requestAnimationFrame(() => {
-      rafScheduled = false;
-      place();
+      raf = false;
+      placeFloating();
     });
   }
-  // Initial placement after layout settles, then follow scroll/resize.
-  requestAnimationFrame(place);
-  window.addEventListener('scroll', schedulePlace, { passive: true, capture: true });
-  window.addEventListener('resize', schedulePlace, { passive: true });
+  window.addEventListener('scroll', scheduleFloat, { passive: true, capture: true });
+  window.addEventListener('resize', scheduleFloat, { passive: true });
 
-  // ---- drag ----
+  let customPos: { left: number; top: number } | null = null;
   let dragging = false;
   let moved = false;
-  let startX = 0;
-  let startY = 0;
-  let originLeft = 0;
-  let originTop = 0;
-
-  fab.addEventListener('pointerdown', (e) => {
+  let sx = 0;
+  let sy = 0;
+  let ox = 0;
+  let oy = 0;
+  floatingFab.addEventListener('pointerdown', (e) => {
     if (busy) return;
     dragging = true;
     moved = false;
-    const r = fab.getBoundingClientRect();
-    originLeft = r.left;
-    originTop = r.top;
-    startX = e.clientX;
-    startY = e.clientY;
-    fab.classList.add('dragging');
-    fab.setPointerCapture(e.pointerId);
+    const r = floatingFab.getBoundingClientRect();
+    ox = r.left;
+    oy = r.top;
+    sx = e.clientX;
+    sy = e.clientY;
+    floatingFab.classList.add('dragging');
+    floatingFab.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
-  fab.addEventListener('pointermove', (e) => {
+  floatingFab.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+    const dx = e.clientX - sx;
+    const dy = e.clientY - sy;
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
       moved = true;
-      customPos = { left: originLeft + dx, top: originTop + dy };
-      place();
+      customPos = { left: ox + dx, top: oy + dy };
+      applyXY(customPos.left, customPos.top);
     }
   });
-  fab.addEventListener('pointerup', (e) => {
+  floatingFab.addEventListener('pointerup', (e) => {
     if (!dragging) return;
     dragging = false;
-    fab.classList.remove('dragging');
+    floatingFab.classList.remove('dragging');
     try {
-      fab.releasePointerCapture(e.pointerId);
+      floatingFab.releasePointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
-    if (!moved) handlers.onFill();
+    if (!moved && !busy) handlers.onFill();
   });
+
+  // ---- mode rendering ----
+  function render(): void {
+    if (!visible) {
+      floatingFab.style.display = 'none';
+      inlineHost.remove();
+      return;
+    }
+    if (submitEl?.isConnected && submitEl.parentElement) {
+      // inline mode: insert before the submit button (if not already there)
+      floatingFab.style.display = 'none';
+      if (inlineHost.nextSibling !== submitEl || inlineHost.parentElement !== submitEl.parentElement) {
+        submitEl.parentElement.insertBefore(inlineHost, submitEl);
+      }
+    } else {
+      // floating mode
+      inlineHost.remove();
+      floatingFab.style.display = '';
+      scheduleFloat();
+    }
+  }
 
   function clearHighlights(resolve: (ref: string) => Element | undefined, refs: string[]) {
     for (const ref of refs) {
@@ -226,12 +264,15 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
   const controller: UIController = {
     setBusy(b) {
       busy = b;
-      fab.disabled = b;
-      fab.textContent = b ? '…' : opts.fillLabel;
+      setLabel();
     },
-    setVisible(visible) {
-      fab.style.display = visible ? '' : 'none';
-      if (visible) schedulePlace();
+    setVisible(v) {
+      visible = v;
+      render();
+    },
+    setSubmitTarget(el) {
+      submitEl = el;
+      render();
     },
     toast(message) {
       toastEl.textContent = message;
