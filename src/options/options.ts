@@ -169,6 +169,41 @@ async function draftFromResume(text: string): Promise<void> {
   }
 }
 
+async function generateProfileWithAI(): Promise<void> {
+  const statusEl = $('resume-status');
+  const buttons = ['parse-resume', 'import-resume', 'generate-profile'].map(
+    (id) => $(id) as HTMLButtonElement,
+  );
+  const genBtn = $('generate-profile') as HTMLButtonElement;
+  buttons.forEach((b) => (b.disabled = true));
+  genBtn.textContent = '…';
+  statusEl.textContent = t('resume_parsing', locale);
+  statusEl.className = 'status';
+  const language = prefs.fillLanguage !== 'auto' ? prefs.fillLanguage : locale;
+  console.info('[Autofy] GENERATE_PROFILE start —', language);
+  const started = Date.now();
+  try {
+    const resp = await sendToBackground({ kind: 'GENERATE_PROFILE', language });
+    console.info('[Autofy] GENERATE_PROFILE done in', Date.now() - started, 'ms', resp.ok ? 'ok' : resp);
+    if (!resp.ok) {
+      statusEl.textContent = `❌ ${resp.message}`;
+      statusEl.className = 'status err';
+      return;
+    }
+    if (resp.kind !== 'GENERATE_PROFILE') return;
+    currentProfile = resp.profile;
+    renderProfileFields();
+    status(statusEl, `✅ ${t('resume_drafted', locale)}`);
+  } catch (e) {
+    console.error('[Autofy] GENERATE_PROFILE threw:', e);
+    statusEl.textContent = `❌ ${String(e)}`;
+    statusEl.className = 'status err';
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+    genBtn.textContent = t('generate_profile', locale);
+  }
+}
+
 async function init(): Promise<void> {
   prefs = await getPrefs();
   locale = resolveLocale(prefs.uiLanguage);
@@ -314,6 +349,7 @@ async function init(): Promise<void> {
     draftFromResume(($('resume') as HTMLTextAreaElement).value),
   );
   $('import-resume').addEventListener('click', () => ($('resume-file') as HTMLInputElement).click());
+  $('generate-profile').addEventListener('click', () => void generateProfileWithAI());
   $('resume-file').addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;

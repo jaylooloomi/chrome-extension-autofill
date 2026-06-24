@@ -9,6 +9,7 @@ import type { ApiConfig, FieldSchema, MappingResponse, Profile } from './types';
 export type Msg =
   | { kind: 'MAP_FIELDS'; fields: FieldSchema[]; formSignature: string; url: string; pageLang: string }
   | { kind: 'PARSE_RESUME'; text: string }
+  | { kind: 'GENERATE_PROFILE'; language?: string }
   | {
       kind: 'RECORD_CORRECTIONS';
       domain: string;
@@ -21,6 +22,7 @@ export type Msg =
 export type Resp =
   | { ok: true; kind: 'MAP_FIELDS'; map: MappingResponse; fromCache: boolean; sample: boolean }
   | { ok: true; kind: 'PARSE_RESUME'; profile: Profile }
+  | { ok: true; kind: 'GENERATE_PROFILE'; profile: Profile }
   | { ok: true; kind: 'RECORD_CORRECTIONS' }
   | { ok: true; kind: 'TEST_CONNECTION'; models: string[] }
   | { ok: false; code: string; message: string };

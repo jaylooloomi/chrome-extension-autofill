@@ -8,7 +8,7 @@ import { getApiConfig, getProfile, getPrefs } from '../shared/storage';
 import { listProfilePaths } from '../shared/profile-schema';
 import { createProvider, codeForStatus } from './llm/provider';
 import { mapFields } from './mapping';
-import { parseResume } from './resume';
+import { parseResume, generateProfile } from './resume';
 import { getCachedMapping, learn, MIN_COVERAGE, toSignatureValues } from './cache';
 
 function domainOf(url: string): string {
@@ -141,6 +141,18 @@ async function handleParseResume(
   return { ok: true, kind: 'PARSE_RESUME', profile };
 }
 
+async function handleGenerateProfile(
+  msg: Extract<Msg, { kind: 'GENERATE_PROFILE' }>,
+): Promise<Resp> {
+  const config = await getApiConfig();
+  if (!isConfigured(config)) {
+    return { ok: false, code: 'NO_CONFIG', message: 'Set up your provider in Autofy options.' };
+  }
+  const provider = createProvider(config);
+  const profile = await generateProfile(provider, msg.language);
+  return { ok: true, kind: 'GENERATE_PROFILE', profile };
+}
+
 async function handleRecordCorrections(
   msg: Extract<Msg, { kind: 'RECORD_CORRECTIONS' }>,
 ): Promise<Resp> {
@@ -155,6 +167,8 @@ async function handle(msg: Msg): Promise<Resp> {
       return handleMapFields(msg);
     case 'PARSE_RESUME':
       return handleParseResume(msg);
+    case 'GENERATE_PROFILE':
+      return handleGenerateProfile(msg);
     case 'RECORD_CORRECTIONS':
       return handleRecordCorrections(msg);
     case 'TEST_CONNECTION':
