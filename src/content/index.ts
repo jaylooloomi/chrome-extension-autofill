@@ -57,11 +57,14 @@ async function bootstrap(): Promise<void> {
     { fillLabel: t('fab_fill', locale), getFieldAnchor: fieldAnchor },
   );
 
+  // Per-site disable: hide the button entirely on hostnames the user opted out.
+  let siteDisabled = (prefs.disabledSites ?? []).includes(location.hostname);
+
   // Re-detect the submit button + field presence on load and on DOM changes.
   function refresh(): void {
-    const hasFields = visibleFillable().length > 0;
-    ui.setVisible(hasFields);
-    ui.setSubmitTarget(hasFields ? findSubmitButton(document) : null);
+    const show = !siteDisabled && visibleFillable().length > 0;
+    ui.setVisible(show);
+    ui.setSubmitTarget(show ? findSubmitButton(document) : null);
   }
   refresh();
   let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -69,6 +72,14 @@ async function bootstrap(): Promise<void> {
     clearTimeout(debounce);
     debounce = setTimeout(refresh, 500);
   }).observe(document.documentElement, { childList: true, subtree: true });
+
+  // React live when the user toggles this site in the popup (no reload needed).
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.prefs) return;
+    const next = changes.prefs.newValue as { disabledSites?: string[] } | undefined;
+    siteDisabled = (next?.disabledSites ?? []).includes(location.hostname);
+    refresh();
+  });
 }
 
 async function runFill(ui: UIController): Promise<void> {

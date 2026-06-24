@@ -49,7 +49,7 @@ function keyOptional(provider: ProviderName): boolean {
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let currentProfile: Profile = {};
-let prefs: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto', fillGaps: true };
+let prefs: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto', fillGaps: true, disabledSites: [] };
 let locale: Locale = 'en';
 
 function status(el: HTMLElement, msg: string, ok = true): void {

@@ -19,9 +19,16 @@ export interface Prefs {
   fillLanguage: string;
   /** Fill fields the profile doesn't cover with realistic AI sample data. */
   fillGaps: boolean;
+  /** Hostnames where the Fill button is suppressed. */
+  disabledSites: string[];
 }
 
-const DEFAULT_PREFS: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto', fillGaps: true };
+const DEFAULT_PREFS: Prefs = {
+  uiLanguage: 'auto',
+  fillLanguage: 'auto',
+  fillGaps: true,
+  disabledSites: [],
+};
 
 async function get<T>(key: string): Promise<T | undefined> {
   const obj = await chrome.storage.local.get(key);
