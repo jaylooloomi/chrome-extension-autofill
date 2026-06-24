@@ -1,50 +1,61 @@
 // Generate Autofy PNG icons (16/48/128) with no dependencies.
-// Design: indigo→violet rounded square with a clean white "A".
+// Design ("Spark-fill", by the design agent): indigo gradient rounded square,
+// two form-field bars, an amber lightning bolt (two triangles), a white spark.
 // Antialiased via 4x4 supersampling; encoded as RGBA PNG using node:zlib.
 
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
-// ---------- geometry (normalized 0..1) ----------
-const APEX = [0.5, 0.2];
-const BL = [0.3, 0.8];
-const BR = [0.7, 0.8];
-const CB_L = [0.3667, 0.6];
-const CB_R = [0.6333, 0.6];
-const STROKE = 0.072;
-const CROSSBAR = 0.058;
-const BG_RADIUS = 0.24;
+// ---------- palette ----------
+const BG_TOP = [99, 102, 241]; // #6366f1
+const BG_BOT = [67, 56, 202]; // #4338ca
+const WHITE = [255, 255, 255];
+const INDIGO200 = [199, 210, 254]; // #c7d2fe
+const AMBER = [251, 191, 36]; // #fbbf24
 
-function distSeg(px, py, ax, ay, bx, by) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const len2 = dx * dx + dy * dy || 1;
-  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  const cx = ax + t * dx;
-  const cy = ay + t * dy;
-  return Math.hypot(px - cx, py - cy);
-}
-
-function inA(x, y) {
-  return (
-    distSeg(x, y, BL[0], BL[1], APEX[0], APEX[1]) <= STROKE ||
-    distSeg(x, y, BR[0], BR[1], APEX[0], APEX[1]) <= STROKE ||
-    distSeg(x, y, CB_L[0], CB_L[1], CB_R[0], CB_R[1]) <= CROSSBAR
-  );
-}
-
-function inRoundedSquare(x, y, r) {
-  const dx = Math.max(r - x, x - (1 - r), 0);
-  const dy = Math.max(r - y, y - (1 - r), 0);
+// ---------- primitives (normalized 0..1) ----------
+function inRoundedRect(px, py, x, y, w, h, r) {
+  const x0 = x;
+  const y0 = y;
+  const x1 = x + w;
+  const y1 = y + h;
+  const dx = px < x0 + r ? x0 + r - px : px > x1 - r ? px - (x1 - r) : 0;
+  const dy = py < y0 + r ? y0 + r - py : py > y1 - r ? py - (y1 - r) : 0;
   return dx * dx + dy * dy <= r * r;
 }
 
-// indigo (#6366f1) top -> violet-indigo (#4f46e5) bottom
-function bg(y) {
-  const top = [99, 102, 241];
-  const bot = [79, 70, 229];
-  return [0, 1, 2].map((i) => Math.round(top[i] + (bot[i] - top[i]) * y));
+function inCircle(px, py, cx, cy, r) {
+  return (px - cx) ** 2 + (py - cy) ** 2 <= r * r;
+}
+
+function inPolygon(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function lerp(a, b, t) {
+  return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t));
+}
+
+// ---------- composition (painter's order) ----------
+const SHAPES = [
+  { test: (x, y) => inRoundedRect(x, y, 0.047, 0.047, 0.906, 0.906, 0.219), color: (_x, y) => lerp(BG_TOP, BG_BOT, y) },
+  { test: (x, y) => inRoundedRect(x, y, 0.203, 0.609, 0.594, 0.102, 0.051), color: () => WHITE },
+  { test: (x, y) => inRoundedRect(x, y, 0.203, 0.766, 0.391, 0.102, 0.051), color: () => INDIGO200 },
+  { test: (x, y) => inPolygon(x, y, [[0.58, 0.16], [0.398, 0.5], [0.586, 0.445]]), color: () => AMBER },
+  { test: (x, y) => inPolygon(x, y, [[0.422, 0.617], [0.602, 0.297], [0.414, 0.359]]), color: () => AMBER },
+  { test: (x, y) => inCircle(x, y, 0.672, 0.234, 0.043), color: () => WHITE },
+];
+
+function colorAt(nx, ny) {
+  let c = null;
+  for (const s of SHAPES) if (s.test(nx, ny)) c = s.color(nx, ny);
+  return c; // null => transparent
 }
 
 function render(size) {
@@ -58,23 +69,14 @@ function render(size) {
       let opaque = 0;
       for (let sy = 0; sy < SS; sy++) {
         for (let sx = 0; sx < SS; sx++) {
-          const nx = (px + (sx + 0.5) / SS) / size;
-          const ny = (py + (sy + 0.5) / SS) / size;
-          if (!inRoundedSquare(nx, ny, BG_RADIUS)) continue;
+          const c = colorAt((px + (sx + 0.5) / SS) / size, (py + (sy + 0.5) / SS) / size);
+          if (!c) continue;
           opaque++;
-          if (inA(nx, ny)) {
-            r += 255;
-            g += 255;
-            b += 255;
-          } else {
-            const c = bg(ny);
-            r += c[0];
-            g += c[1];
-            b += c[2];
-          }
+          r += c[0];
+          g += c[1];
+          b += c[2];
         }
       }
-      const total = SS * SS;
       const i = (py * size + px) * 4;
       if (opaque === 0) {
         data[i] = data[i + 1] = data[i + 2] = data[i + 3] = 0;
@@ -82,7 +84,7 @@ function render(size) {
         data[i] = Math.round(r / opaque);
         data[i + 1] = Math.round(g / opaque);
         data[i + 2] = Math.round(b / opaque);
-        data[i + 3] = Math.round((opaque / total) * 255);
+        data[i + 3] = Math.round((opaque / (SS * SS)) * 255);
       }
     }
   }
@@ -109,8 +111,7 @@ function crc32(buf) {
 function chunk(type, data) {
   const len = Buffer.alloc(4);
   len.writeUInt32BE(data.length, 0);
-  const typeBuf = Buffer.from(type, 'ascii');
-  const body = Buffer.concat([typeBuf, data]);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
   const crc = Buffer.alloc(4);
   crc.writeUInt32BE(crc32(body), 0);
   return Buffer.concat([len, body, crc]);
@@ -121,22 +122,16 @@ function encodePng(size, rgba) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  // 10,11,12 = compression/filter/interlace = 0
+  ihdr[8] = 8;
+  ihdr[9] = 6;
   const stride = size * 4;
   const raw = Buffer.alloc((stride + 1) * size);
   for (let y = 0; y < size; y++) {
-    raw[y * (stride + 1)] = 0; // filter: none
+    raw[y * (stride + 1)] = 0;
     rgba.copy(raw, y * (stride + 1) + 1, y * stride, y * stride + stride);
   }
   const idat = deflateSync(raw, { level: 9 });
-  return Buffer.concat([
-    sig,
-    chunk('IHDR', ihdr),
-    chunk('IDAT', idat),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
+  return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))]);
 }
 
 mkdirSync('icons', { recursive: true });
