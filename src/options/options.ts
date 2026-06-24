@@ -159,7 +159,7 @@ async function draftFromResume(text: string): Promise<void> {
     renderProfileFields();
     status(statusEl, `✅ ${t('resume_drafted', locale)}`);
   } catch (e) {
-    console.error('[Autofy] PARSE_RESUME threw:', e);
+    console.debug('[Autofy] PARSE_RESUME threw:', e);
     statusEl.textContent = `❌ ${String(e)}`;
     statusEl.className = 'status err';
   } finally {
@@ -195,7 +195,7 @@ async function generateProfileWithAI(): Promise<void> {
     renderProfileFields();
     status(statusEl, `✅ ${t('resume_drafted', locale)}`);
   } catch (e) {
-    console.error('[Autofy] GENERATE_PROFILE threw:', e);
+    console.debug('[Autofy] GENERATE_PROFILE threw:', e);
     statusEl.textContent = `❌ ${String(e)}`;
     statusEl.className = 'status err';
   } finally {

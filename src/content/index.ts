@@ -118,7 +118,7 @@ async function runFill(ui: UIController, locale: Locale): Promise<void> {
       ui.toast(t('toast_updated_reload', locale));
       return;
     }
-    console.warn('[Autofy] MAP_FIELDS failed:', resp.code, resp.message, `(${Math.round(tResp - tScan)}ms)`);
+    console.debug('[Autofy] MAP_FIELDS failed:', resp.code, resp.message, `(${Math.round(tResp - tScan)}ms)`);
     ui.toast(`Autofy: ${resp.message}`);
     return;
   }

@@ -182,7 +182,7 @@ export async function mapFields(
       return validateMapping(raw, req.fields);
     } catch (err) {
       lastErr = err;
-      console.warn(
+      console.debug(
         `[Autofy map] LLM attempt ${attempt + 1} failed after ${Date.now() - t}ms:`,
         err instanceof LLMError ? `${err.code} ${err.message}` : String(err),
       );
