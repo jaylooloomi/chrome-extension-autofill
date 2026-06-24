@@ -240,3 +240,38 @@ export function findFormContainers(root: ParentNode = document): HTMLElement[] {
     Array.from(f.querySelectorAll('input, select, textarea, [contenteditable]')).some(isFillable),
   );
 }
+
+// Words that mark a form's submit / primary action button (en + zh + ja).
+const SUBMIT_RE =
+  /submit|apply|send|register|sign\s?up|continue|next|book|reserve|confirm|送出|傳送|送信|提交|確定|确定|確認|确认|立即預約|預約|预约|報名|报名|註冊|注册|申請|申请|下一步|寄出|发送|登録|送信/i;
+
+function buttonText(el: Element): string {
+  return `${el.textContent ?? ''} ${(el as HTMLInputElement).value ?? ''} ${el.getAttribute('aria-label') ?? ''}`;
+}
+
+/** Best-effort detection of a form's submit / primary action button so the Fill
+ *  button can sit next to it. Pure DOM heuristics (no AI): prefer real submit
+ *  inputs, else buttons whose text matches a submit word; pick the lowest one
+ *  on the page (submit buttons sit at the bottom). Returns null if none fit. */
+export function findSubmitButton(root: ParentNode = document): HTMLElement | null {
+  const all = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'button, input[type="submit"], input[type="button"], [role="button"]',
+    ),
+  ).filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
+
+  const submits = all.filter(
+    (el) => (el as HTMLInputElement).type === 'submit' || el.getAttribute('type') === 'submit',
+  );
+  const byText = all.filter((el) => SUBMIT_RE.test(buttonText(el)));
+  const pool = submits.length ? submits : byText;
+  if (!pool.length) return null;
+
+  // Lowest on the page wins (the action button is usually at the bottom).
+  return pool.reduce((a, b) =>
+    b.getBoundingClientRect().top >= a.getBoundingClientRect().top ? b : a,
+  );
+}

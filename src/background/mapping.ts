@@ -11,15 +11,46 @@ const FEW_SHOT = `Examples (job application context):
 - A <select> "Country" -> choose the option text matching the profile country.
 - "Are you authorized to work?" -> use job.workAuthorization if present, else null.`;
 
-/** Build the mapping prompt. When `fake` is true (the user has no profile),
- *  ask for realistic, internally-consistent sample data instead of nulls. */
-export function buildMappingPrompt(req: MappingRequest, fake = false, language?: string): string {
+/** Build the mapping prompt.
+ *  - `fake`: user has no profile → invent fully consistent sample data.
+ *  - `fillGaps`: user HAS a profile → use it, and fill the fields it doesn't
+ *    cover with consistent sample data instead of leaving them null. */
+export function buildMappingPrompt(
+  req: MappingRequest,
+  fake = false,
+  language?: string,
+  fillGaps = false,
+): string {
   // Never send captcha / do-not-fill fields to the model.
   const fields = req.fields.filter((f) => !f.noFill);
   const langLine =
     language && language !== 'auto'
       ? `- Write any text you generate (names, addresses, free text, option choices) in ${language}.`
       : '';
+  if (fillGaps && !fake) {
+    return [
+      'You fill a web form for the user from their PROFILE, completing any gaps with sample data.',
+      'You are given FIELDS (each with a "ref") and a PROFILE (JSON).',
+      'Rules:',
+      '- For each field, use the matching PROFILE value when one exists.',
+      '- For fields the PROFILE does NOT cover, generate realistic, internally-consistent',
+      '  SAMPLE data that fits the field and stays consistent with the profile (e.g. an',
+      '  email or phone for the same person/company, a plausible <select> option, sensible',
+      '  checkbox choices).',
+      '- For <select>/radio, return one of the provided option TEXT or value — a REAL choice,',
+      '  never an empty/placeholder option like "Select…".',
+      '- For checkboxes, return "true" or "false".',
+      '- Fill EVERY field; avoid null unless no sensible value is possible.',
+      langLine,
+      '- Output strictly: { "field_0": "value", ... }. No prose.',
+      '',
+      `FIELDS:\n${JSON.stringify(fields, null, 0)}`,
+      '',
+      `PROFILE:\n${JSON.stringify(req.profile, null, 0)}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
   if (fake) {
     return [
       'Generate realistic SAMPLE form data for autofill testing.',
@@ -89,10 +120,10 @@ export function validateMapping(raw: unknown, fields: FieldSchema[]): MappingRes
 export async function mapFields(
   req: MappingRequest,
   provider: LLMProvider,
-  opts: { fake?: boolean; language?: string; signal?: AbortSignal } = {},
+  opts: { fake?: boolean; fillGaps?: boolean; language?: string; signal?: AbortSignal } = {},
 ): Promise<MappingResponse> {
-  const { fake = false, language, signal } = opts;
-  const prompt = buildMappingPrompt(req, fake, language);
+  const { fake = false, fillGaps = false, language, signal } = opts;
+  const prompt = buildMappingPrompt(req, fake, language, fillGaps);
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     const t = Date.now();

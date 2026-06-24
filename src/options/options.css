@@ -58,6 +58,8 @@ button:hover { background: #f3f4f6; }
 button.primary { background: var(--indigo); color: #fff; border-color: var(--indigo); }
 button.primary:hover { filter: brightness(1.05); }
 .row { display: flex; gap: 10px; }
+.opt { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 13px; color: var(--text); }
+.opt input { width: auto; margin: 0; }
 .status { margin-left: 10px; font-size: 12px; }
 .status.ok { color: #166534; }
 .status.err { color: #991b1b; }

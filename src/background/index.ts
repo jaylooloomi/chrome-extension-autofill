@@ -41,7 +41,12 @@ async function handleMapFields(
   // everything blank (fake-data mode). Skip the cache in this mode.
   const fake = listProfilePaths(profile).length === 0;
 
-  if (!fake) {
+  // Gap-fill: when the user has a profile, optionally fill the fields it
+  // doesn't cover with consistent sample data (pref, default on).
+  const fillGaps = !fake && prefs.fillGaps;
+  const sample = fake || fillGaps;
+
+  if (!sample) {
     const cached = await getCachedMapping(domain, msg.formSignature, msg.fields, profile);
     if (cached && cached.coverage >= MIN_COVERAGE) {
       console.info('[Autofy bg] cache hit (no AI):', {
@@ -49,17 +54,18 @@ async function handleMapFields(
         cache: Date.now() - tLoad,
         fields: msg.fields.length,
       });
-      return { ok: true, kind: 'MAP_FIELDS', map: cached.map, fromCache: true, fake: false };
+      return { ok: true, kind: 'MAP_FIELDS', map: cached.map, fromCache: true, sample: false };
     }
   }
 
   const language = prefs.fillLanguage === 'auto' ? msg.pageLang : prefs.fillLanguage;
   const provider = createProvider(config);
   const tBeforeLLM = Date.now();
-  const map = await mapFields({ fields: msg.fields, profile }, provider, { fake, language });
+  const map = await mapFields({ fields: msg.fields, profile }, provider, { fake, fillGaps, language });
   const tLLM = Date.now();
-  if (!fake) {
-    // Learn the site mapping for next time (best-effort).
+  if (!sample) {
+    // Learn the site mapping for next time (best-effort). Skip when sample data
+    // was generated — it isn't the user's real data and shouldn't be cached.
     try {
       await learn(domain, msg.formSignature, toSignatureValues(msg.fields, map), profile);
     } catch {
@@ -76,8 +82,9 @@ async function handleMapFields(
     model: config.model,
     fields: msg.fields.length,
     fake,
+    fillGaps,
   });
-  return { ok: true, kind: 'MAP_FIELDS', map, fromCache: false, fake };
+  return { ok: true, kind: 'MAP_FIELDS', map, fromCache: false, sample };
 }
 
 /** List available models for a provider — used by the options "Test connection"

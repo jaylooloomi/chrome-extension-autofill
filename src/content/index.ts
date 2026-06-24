@@ -1,14 +1,14 @@
-// Content script bootstrap: a floating, draggable Fill button that scans the
-// page and runs the scan -> map -> fill -> review flow (spec §6). Heavy work
-// only happens on click.
+// Content script bootstrap: a Fill button anchored next to the form's submit
+// button when one is detected (else above the field region, else floating),
+// driving the scan -> map -> fill -> review flow (spec §6).
 
-import { scanFields, isFillable } from './detector';
+import { scanFields, isFillable, findSubmitButton } from './detector';
 import { resolve } from './refs';
 import { fillFields } from './fill-engine';
 import { sendToBackground } from '../shared/messages';
 import { getPrefs } from '../shared/storage';
 import { resolveLocale, t } from '../shared/i18n';
-import { mountUI, type ReviewContext, type UIController } from './review-ui';
+import { mountUI, type Anchor, type ReviewContext, type UIController } from './review-ui';
 
 if (!(window as unknown as { __autofy?: boolean }).__autofy) {
   (window as unknown as { __autofy?: boolean }).__autofy = true;
@@ -26,22 +26,32 @@ function visibleFillable(): HTMLElement[] {
   });
 }
 
-/** Top-left of the form region = top-left of the bounding box of all fillable
- *  fields. Works whether the form is a <form> or a plain <div>. */
-function formAnchor(): { left: number; top: number } | null {
-  let minLeft = Infinity;
-  let minTop = Infinity;
-  for (const el of visibleFillable()) {
-    const r = el.getBoundingClientRect();
-    minLeft = Math.min(minLeft, r.left);
-    minTop = Math.min(minTop, r.top);
-  }
-  return Number.isFinite(minLeft) ? { left: minLeft, top: minTop } : null;
-}
-
 async function bootstrap(): Promise<void> {
   const prefs = await getPrefs();
   const locale = resolveLocale(prefs.uiLanguage);
+
+  // Cached anchor target (the form's submit button), refreshed on DOM changes
+  // rather than recomputed every scroll frame.
+  let submitEl: HTMLElement | null = findSubmitButton(document);
+
+  function getAnchor(): Anchor | null {
+    if (submitEl?.isConnected) {
+      const r = submitEl.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        return { rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, place: 'left' };
+      }
+    }
+    // Fallback: top-left of the bounding box of all fillable fields.
+    let minLeft = Infinity;
+    let minTop = Infinity;
+    for (const el of visibleFillable()) {
+      const r = el.getBoundingClientRect();
+      minLeft = Math.min(minLeft, r.left);
+      minTop = Math.min(minTop, r.top);
+    }
+    if (!Number.isFinite(minLeft)) return null;
+    return { rect: { left: minLeft, top: minTop, right: minLeft, bottom: minTop }, place: 'above' };
+  }
 
   const ui: UIController = mountUI(
     {
@@ -55,17 +65,20 @@ async function bootstrap(): Promise<void> {
         });
       },
     },
-    { fillLabel: t('fab_fill', locale), getAnchor: formAnchor },
+    { fillLabel: t('fab_fill', locale), getAnchor },
   );
 
-  // Only show the button when the page actually has fillable fields. Re-check
-  // on DOM changes so SPA-rendered forms show it (and empty pages hide it).
-  const refreshVisibility = () => ui.setVisible(visibleFillable().length > 0);
-  refreshVisibility();
+  // Show the button only when there are fillable fields; re-detect the submit
+  // button and visibility on DOM changes (SPA-rendered forms).
+  function refresh(): void {
+    submitEl = findSubmitButton(document);
+    ui.setVisible(visibleFillable().length > 0);
+  }
+  refresh();
   let debounce: ReturnType<typeof setTimeout> | undefined;
   new MutationObserver(() => {
     clearTimeout(debounce);
-    debounce = setTimeout(refreshVisibility, 500);
+    debounce = setTimeout(refresh, 500);
   }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
@@ -98,10 +111,8 @@ async function runFill(ui: UIController): Promise<void> {
   const results = fillFields(resp.map, resolve);
   const tFill = performance.now();
   const ctx: ReviewContext = { domain: location.hostname, formSignature };
-  ui.showReview(fields, results, resp.map, ctx, resolve, resp.fake);
+  ui.showReview(fields, results, resp.map, ctx, resolve, resp.sample);
 
-  // Timing breakdown — see the page console (the background/service-worker
-  // console has the per-stage backend timings).
   console.info('[Autofy] fill timings (ms):', {
     scan: Math.round(tScan - t0),
     roundtrip_incl_AI: Math.round(tResp - tScan),
@@ -109,9 +120,9 @@ async function runFill(ui: UIController): Promise<void> {
     total: Math.round(tFill - t0),
     fields: fields.length,
     fromCache: resp.fromCache,
-    fake: resp.fake,
+    sample: resp.sample,
   });
 
-  if (resp.fake) ui.toast('No profile set — filled with sample data. Review before submitting.');
+  if (resp.sample) ui.toast('Filled (gaps use AI sample data) — review before submitting.');
   else if (resp.fromCache) ui.toast('Filled from cache (no AI call).');
 }

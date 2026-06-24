@@ -21,11 +21,18 @@ export interface UIHandlers {
   onConfirm(values: Record<string, string | null>, ctx: ReviewContext): void;
 }
 
+/** Where to anchor the Fill button. `place: 'left'` sits it beside (left of) a
+ *  submit button; `'above'` sits it above the top-left of the form region. */
+export interface Anchor {
+  rect: { left: number; top: number; right: number; bottom: number };
+  place: 'left' | 'above';
+}
+
 export interface UIOptions {
   /** Localized label for the Fill button (e.g. "AutoFill" / "自動填寫"). */
   fillLabel: string;
-  /** Top-left of the form region in viewport coords, or null for no anchor. */
-  getAnchor?: () => { left: number; top: number } | null;
+  /** Where to anchor the button this frame, or null for floating. */
+  getAnchor?: () => Anchor | null;
 }
 
 const STYLES = `
@@ -85,7 +92,7 @@ export interface UIController {
     map: MappingResponse,
     ctx: ReviewContext,
     resolve: (ref: string) => Element | undefined,
-    fake?: boolean,
+    sample?: boolean,
   ): void;
 }
 
@@ -129,11 +136,20 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
       ({ left, top } = customPos);
     } else {
       const a = opts.getAnchor?.() ?? null;
-      if (a) {
-        left = a.left; // align to the form's left edge
-        top = a.top - h - 10; // sit just above the first field
+      if (a && a.place === 'left' && a.rect.left - w - 8 >= 4) {
+        // Beside the submit button, vertically centered.
+        left = a.rect.left - w - 8;
+        top = a.rect.top + (a.rect.bottom - a.rect.top - h) / 2;
+      } else if (a && a.place === 'left') {
+        // No room to the left → just above the submit button.
+        left = a.rect.left;
+        top = a.rect.top - h - 8;
+      } else if (a) {
+        // Above the top-left of the form region.
+        left = a.rect.left;
+        top = a.rect.top - h - 10;
       } else {
-        left = window.innerWidth - w - 20; // fallback: bottom-right
+        left = window.innerWidth - w - 20; // floating fallback: bottom-right
         top = window.innerHeight - h - 20;
       }
     }
@@ -223,15 +239,15 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4500);
     },
-    showReview(fields, results, map, ctx, resolve, fake = false) {
+    showReview(fields, results, map, ctx, resolve, sample = false) {
       const status = new Map(results.map((r) => [r.ref, r]));
       panel.innerHTML = '';
 
       const head = document.createElement('div');
       head.className = 'head';
       const filledCount = results.filter((r) => r.status === 'filled').length;
-      const sub = fake
-        ? `⚠ SAMPLE DATA (no profile) · ${filledCount}/${fields.length} filled · review before submitting`
+      const sub = sample
+        ? `⚠ includes AI sample data · ${filledCount}/${fields.length} filled · review before submitting`
         : `${filledCount}/${fields.length} filled · nothing is sent automatically`;
       head.innerHTML = `<span>Review &amp; submit<br><span class="sub">${sub}</span></span>`;
       panel.appendChild(head);

@@ -19,7 +19,7 @@ export type Msg =
   | { kind: 'TEST_CONNECTION'; config: ApiConfig };
 
 export type Resp =
-  | { ok: true; kind: 'MAP_FIELDS'; map: MappingResponse; fromCache: boolean; fake: boolean }
+  | { ok: true; kind: 'MAP_FIELDS'; map: MappingResponse; fromCache: boolean; sample: boolean }
   | { ok: true; kind: 'PARSE_RESUME'; profile: Profile }
   | { ok: true; kind: 'RECORD_CORRECTIONS' }
   | { ok: true; kind: 'TEST_CONNECTION'; models: string[] }

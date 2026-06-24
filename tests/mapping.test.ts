@@ -34,6 +34,18 @@ describe('mapping', () => {
     expect(sentPrompt).toContain('SAMPLE');
   });
 
+  it('fill-gaps mode includes the profile and asks to complete gaps', () => {
+    const prompt = buildMappingPrompt(
+      { fields, profile: { basics: { fullName: 'Wang' } } },
+      false,
+      undefined,
+      true,
+    );
+    expect(prompt).toContain('PROFILE');
+    expect(prompt).toContain('SAMPLE');
+    expect(prompt).toContain('avoid null');
+  });
+
   it('coerces a raw response and fills every ref', () => {
     const map = validateMapping({ field_0: 'a@b.com', field_1: 42 }, fields);
     expect(map).toEqual({ field_0: 'a@b.com', field_1: '42' });

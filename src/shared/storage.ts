@@ -17,9 +17,11 @@ export interface Prefs {
   uiLanguage: string;
   /** Fill output language; 'auto' uses the page language. */
   fillLanguage: string;
+  /** Fill fields the profile doesn't cover with realistic AI sample data. */
+  fillGaps: boolean;
 }
 
-const DEFAULT_PREFS: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto' };
+const DEFAULT_PREFS: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto', fillGaps: true };
 
 async function get<T>(key: string): Promise<T | undefined> {
   const obj = await chrome.storage.local.get(key);

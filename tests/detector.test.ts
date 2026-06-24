@@ -4,8 +4,22 @@ import {
   getLabel,
   fieldSignature,
   findFormContainers,
+  findSubmitButton,
   isCaptchaField,
 } from '../src/content/detector';
+
+function withRect<T>(fn: () => T): T {
+  // jsdom returns a 0-size rect for everything; give buttons a real size so the
+  // visibility filter in findSubmitButton keeps them.
+  const orig = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = () =>
+    ({ width: 100, height: 30, top: 100, left: 0, right: 100, bottom: 130, x: 0, y: 100, toJSON() {} }) as DOMRect;
+  try {
+    return fn();
+  } finally {
+    Element.prototype.getBoundingClientRect = orig;
+  }
+}
 
 function setBody(html: string) {
   document.body.innerHTML = html;
@@ -93,6 +107,16 @@ describe('detector', () => {
     expect(isCaptchaField({ name: 'captcha_input' })).toBe(true);
     expect(isCaptchaField({ label: 'Postal code' })).toBe(false);
     expect(isCaptchaField({ label: 'Country' })).toBe(false);
+  });
+
+  it('detects the submit/action button, including Chinese 立即預約', () => {
+    setBody(`<form><input name="x" type="text"><button type="button" id="r">立即預約</button></form>`);
+    expect(withRect(() => findSubmitButton(document))?.id).toBe('r');
+  });
+
+  it('returns null when no button looks like a submit/action button', () => {
+    setBody(`<form><input name="x" type="text"><button type="button" id="c">取消</button></form>`);
+    expect(withRect(() => findSubmitButton(document))).toBeNull();
   });
 
   it('finds only forms that contain fillable fields', () => {

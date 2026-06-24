@@ -49,7 +49,7 @@ function keyOptional(provider: ProviderName): boolean {
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let currentProfile: Profile = {};
-let prefs: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto' };
+let prefs: Prefs = { uiLanguage: 'auto', fillLanguage: 'auto', fillGaps: true };
 let locale: Locale = 'en';
 
 function status(el: HTMLElement, msg: string, ok = true): void {
@@ -198,6 +198,13 @@ async function init(): Promise<void> {
   );
   fillLang.addEventListener('change', async () => {
     prefs.fillLanguage = fillLang.value;
+    await setPrefs(prefs);
+  });
+
+  const fillGaps = $('fillGaps') as HTMLInputElement;
+  fillGaps.checked = prefs.fillGaps;
+  fillGaps.addEventListener('change', async () => {
+    prefs.fillGaps = fillGaps.checked;
     await setPrefs(prefs);
   });
 
