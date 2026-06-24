@@ -28,12 +28,14 @@ function isConfigured(config: ApiConfig | null): config is ApiConfig {
 async function handleMapFields(
   msg: Extract<Msg, { kind: 'MAP_FIELDS' }>,
 ): Promise<Resp> {
+  const t0 = Date.now();
   const config = await getApiConfig();
   if (!isConfigured(config)) {
     return { ok: false, code: 'NO_CONFIG', message: 'Set up your provider in Autofy options.' };
   }
-  const profile = await getProfile();
+  const [profile, prefs] = await Promise.all([getProfile(), getPrefs()]);
   const domain = domainOf(msg.url);
+  const tLoad = Date.now();
 
   // No profile at all -> generate plausible sample data instead of leaving
   // everything blank (fake-data mode). Skip the cache in this mode.
@@ -42,14 +44,20 @@ async function handleMapFields(
   if (!fake) {
     const cached = await getCachedMapping(domain, msg.formSignature, msg.fields, profile);
     if (cached && cached.coverage >= MIN_COVERAGE) {
+      console.info('[Autofy bg] cache hit (no AI):', {
+        load: tLoad - t0,
+        cache: Date.now() - tLoad,
+        fields: msg.fields.length,
+      });
       return { ok: true, kind: 'MAP_FIELDS', map: cached.map, fromCache: true, fake: false };
     }
   }
 
-  const prefs = await getPrefs();
   const language = prefs.fillLanguage === 'auto' ? msg.pageLang : prefs.fillLanguage;
   const provider = createProvider(config);
+  const tBeforeLLM = Date.now();
   const map = await mapFields({ fields: msg.fields, profile }, provider, { fake, language });
+  const tLLM = Date.now();
   if (!fake) {
     // Learn the site mapping for next time (best-effort).
     try {
@@ -58,6 +66,17 @@ async function handleMapFields(
       /* learning is non-critical */
     }
   }
+  console.info('[Autofy bg] timings (ms):', {
+    load: tLoad - t0,
+    preLLM: tBeforeLLM - tLoad,
+    llm: tLLM - tBeforeLLM,
+    learn: Date.now() - tLLM,
+    total: Date.now() - t0,
+    provider: config.provider,
+    model: config.model,
+    fields: msg.fields.length,
+    fake,
+  });
   return { ok: true, kind: 'MAP_FIELDS', map, fromCache: false, fake };
 }
 
