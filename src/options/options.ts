@@ -26,6 +26,15 @@ const SUGGESTED_MODEL: Record<ProviderName, string> = {
   ollama: 'minimax-m2.5:cloud',
 };
 
+/** Curated model suggestions shown in the combobox per provider. For Ollama the
+ *  live list from the daemon is merged on top. Users can still type any value. */
+const PROVIDER_MODELS: Record<ProviderName, string[]> = {
+  gemini: ['gemini-1.5-flash', 'gemini-1.5-pro'],
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+  anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
+  ollama: ['minimax-m2.5:cloud', 'qwen3-coder-next:cloud', 'llama3.2:3b'],
+};
+
 const KEY_HELP: Record<ProviderName, string> = {
   gemini: 'https://aistudio.google.com/app/apikey',
   openai: 'https://platform.openai.com/api-keys',
@@ -181,12 +190,36 @@ async function init(): Promise<void> {
   } else {
     modelInput.value = SUGGESTED_MODEL.gemini;
   }
+  function populateModelList(models: string[]): void {
+    const list = $('model-list') as HTMLDataListElement;
+    list.innerHTML = '';
+    for (const m of [...new Set(models)]) {
+      const o = document.createElement('option');
+      o.value = m;
+      list.appendChild(o);
+    }
+  }
+
+  /** Silently fetch the live Ollama model list and merge it into the combobox. */
+  async function autoLoadOllamaModels(): Promise<void> {
+    const cfg = formConfig();
+    if (cfg.provider !== 'ollama') return;
+    const resp = await sendToBackground({ kind: 'TEST_CONNECTION', config: cfg });
+    if (resp.ok && resp.kind === 'TEST_CONNECTION') {
+      populateModelList([...resp.models, ...PROVIDER_MODELS.ollama]);
+    }
+  }
+
   applyProviderUI(providerSel.value as ProviderName);
+  populateModelList(PROVIDER_MODELS[providerSel.value as ProviderName]);
+  if (providerSel.value === 'ollama') void autoLoadOllamaModels();
 
   providerSel.addEventListener('change', () => {
     const p = providerSel.value as ProviderName;
     applyProviderUI(p);
-    if (!modelInput.value.trim()) modelInput.value = SUGGESTED_MODEL[p];
+    modelInput.value = SUGGESTED_MODEL[p]; // old model id won't work on a new provider
+    populateModelList(PROVIDER_MODELS[p]);
+    if (p === 'ollama') void autoLoadOllamaModels();
   });
 
   function formConfig(): ApiConfig {
