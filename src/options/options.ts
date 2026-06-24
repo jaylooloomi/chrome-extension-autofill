@@ -22,7 +22,7 @@ const OLLAMA_DEFAULT_ENDPOINT = 'http://localhost:11434/v1';
 const SUGGESTED_MODEL: Record<ProviderName, string> = {
   gemini: 'gemini-1.5-flash',
   openai: 'gpt-4o-mini',
-  anthropic: 'claude-3-5-haiku-latest',
+  anthropic: 'claude-haiku-4-5', // cheap/fast default for the JSON-mapping task
   ollama: 'minimax-m2.5:cloud',
 };
 
@@ -31,7 +31,7 @@ const SUGGESTED_MODEL: Record<ProviderName, string> = {
 const PROVIDER_MODELS: Record<ProviderName, string[]> = {
   gemini: ['gemini-1.5-flash', 'gemini-1.5-pro'],
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
-  anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
+  anthropic: ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8', 'claude-opus-4-5'],
   ollama: ['minimax-m2.5:cloud', 'qwen3-coder-next:cloud', 'llama3.2:3b'],
 };
 
