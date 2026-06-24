@@ -115,6 +115,49 @@ export function validateMapping(raw: unknown, fields: FieldSchema[]): MappingRes
   return out;
 }
 
+const PLACEHOLDER_OPTION =
+  /^(\s*|--+|select|choose|請選擇|请选择|選擇|选择|請選取|please\s*select|n\/a)\s*$/i;
+
+/** Local last-resort value for a field the LLM left empty (sample/gap modes).
+ *  Guarantees no non-captcha field stays blank even if the model is lazy. */
+function fallbackValue(f: FieldSchema): string {
+  const opts = (f.options ?? []).filter(
+    (o) => !(PLACEHOLDER_OPTION.test(o.text) || o.value === ''),
+  );
+  if (opts.length) return opts[0].value || opts[0].text; // select / radio
+  switch (f.type) {
+    case 'email':
+      return 'sample@example.com';
+    case 'tel':
+      return '0912000000';
+    case 'number':
+      return '1';
+    case 'url':
+      return 'https://example.com';
+    case 'date':
+      return '2025-01-01';
+    case 'checkbox':
+      return 'true';
+    default:
+      return 'Sample';
+  }
+}
+
+/** Fill any non-captcha field the LLM left null/empty with a local fallback.
+ *  Used only in sample / gap-fill modes so the form is never left half-empty. */
+export function fillRemainingGaps(
+  fields: FieldSchema[],
+  map: MappingResponse,
+): MappingResponse {
+  const out: MappingResponse = { ...map };
+  for (const f of fields) {
+    if (f.noFill) continue; // captcha — leave for the user
+    const v = out[f.ref];
+    if (v == null || v === '') out[f.ref] = fallbackValue(f);
+  }
+  return out;
+}
+
 /** Run a mapping request through a provider, retrying once on a parse failure.
  *  Pass `fake: true` to generate sample data when the user has no profile. */
 export async function mapFields(

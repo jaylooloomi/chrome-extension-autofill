@@ -7,7 +7,7 @@ import type { ApiConfig } from '../shared/types';
 import { getApiConfig, getProfile, getPrefs } from '../shared/storage';
 import { listProfilePaths } from '../shared/profile-schema';
 import { createProvider, codeForStatus } from './llm/provider';
-import { mapFields } from './mapping';
+import { mapFields, fillRemainingGaps } from './mapping';
 import { parseResume, generateProfile } from './resume';
 import { getCachedMapping, learn, MIN_COVERAGE, toSignatureValues } from './cache';
 
@@ -61,8 +61,10 @@ async function handleMapFields(
   const language = prefs.fillLanguage === 'auto' ? msg.pageLang : prefs.fillLanguage;
   const provider = createProvider(config);
   const tBeforeLLM = Date.now();
-  const map = await mapFields({ fields: msg.fields, profile }, provider, { fake, fillGaps, language });
+  let map = await mapFields({ fields: msg.fields, profile }, provider, { fake, fillGaps, language });
   const tLLM = Date.now();
+  // Safety net: in sample/gap-fill modes, never leave a non-captcha field blank.
+  if (sample) map = fillRemainingGaps(msg.fields, map);
   if (!sample) {
     // Learn the site mapping for next time (best-effort). Skip when sample data
     // was generated — it isn't the user's real data and shouldn't be cached.

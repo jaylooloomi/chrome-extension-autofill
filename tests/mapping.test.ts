@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMappingPrompt, validateMapping, mapFields } from '../src/background/mapping';
+import {
+  buildMappingPrompt,
+  validateMapping,
+  mapFields,
+  fillRemainingGaps,
+} from '../src/background/mapping';
 import { LLMError } from '../src/shared/types';
 import type { FieldSchema, LLMProvider } from '../src/shared/types';
 
@@ -79,6 +84,37 @@ describe('mapping', () => {
     expect(prompt).toContain('zh-TW');
     const auto = buildMappingPrompt({ fields, profile: {} }, false, 'auto');
     expect(auto).not.toContain('Write any text you generate');
+  });
+
+  it('fillRemainingGaps fills empty non-captcha fields, skips captcha, keeps values', () => {
+    const f: FieldSchema[] = [
+      { ref: 'field_0', tag: 'input', type: 'email', signature: 'e:email' },
+      {
+        ref: 'field_1',
+        tag: 'select',
+        type: 'select',
+        signature: 'b:select',
+        options: [
+          { value: '', text: '請選擇' },
+          { value: '2', text: '50~100萬' },
+        ],
+      },
+      { ref: 'field_2', tag: 'input', type: 'checkbox', signature: 'c:checkbox' },
+      { ref: 'field_3', tag: 'input', type: 'text', signature: 'cap:text', noFill: true },
+      { ref: 'field_4', tag: 'input', type: 'text', signature: 'keep:text' },
+    ];
+    const out = fillRemainingGaps(f, {
+      field_0: null,
+      field_1: null,
+      field_2: null,
+      field_3: null,
+      field_4: '宏思科技',
+    });
+    expect(out.field_0).toBe('sample@example.com');
+    expect(out.field_1).toBe('2'); // skipped the "請選擇" placeholder
+    expect(out.field_2).toBe('true');
+    expect(out.field_3).toBeNull(); // captcha left for the user
+    expect(out.field_4).toBe('宏思科技'); // existing value kept
   });
 
   it('returns a validated map from a provider', async () => {
