@@ -90,7 +90,7 @@ function renderProfileFields(): void {
   for (const f of SCALAR_FIELDS) {
     const label = document.createElement('label');
     if (f.type === 'textarea') label.className = 'full';
-    label.textContent = f.label;
+    label.textContent = t(f.labelKey, locale);
     const input =
       f.type === 'textarea' ? document.createElement('textarea') : document.createElement('input');
     if (input instanceof HTMLInputElement) input.type = f.type ?? 'text';
@@ -163,6 +163,9 @@ async function init(): Promise<void> {
     // Re-label the "Auto" option in the new locale.
     uiLang.options[0].textContent = t('auto', locale);
     applyI18n();
+    // Re-render profile field labels in the new locale (preserve edits).
+    currentProfile = readProfileFromForm();
+    renderProfileFields();
   });
 
   const fillLang = $('fillLang') as HTMLSelectElement;

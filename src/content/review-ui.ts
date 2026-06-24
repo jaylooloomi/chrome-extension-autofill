@@ -1,8 +1,8 @@
-// Fill button(s) + pre-submit review panel (spec §4.4, §5.3).
-// Rendered inside a Shadow DOM so host-page CSS cannot break it. A Fill button
-// is anchored to each detected form (or floats bottom-right when no form is
-// found). The panel NEVER submits — it highlights, lists, and lets the user
-// edit; captcha/verification fields are flagged "manual" and left blank.
+// Floating, draggable Fill button + pre-submit review panel (spec §4.4, §5.3).
+// Rendered inside a Shadow DOM so host-page CSS cannot break it. The button
+// floats, can be dragged anywhere, and remembers its position. The panel NEVER
+// submits — it highlights, lists, and lets the user edit; captcha fields are
+// flagged "manual" and left blank.
 
 import type { FieldSchema, FillResult, MappingResponse } from '../shared/types';
 import { fillElement } from './fill-engine';
@@ -12,27 +12,30 @@ export interface ReviewContext {
   formSignature: string;
 }
 
-/** A place to put a Fill button. `anchor` null => floating bottom-right. */
-export interface FillTarget {
-  root: ParentNode;
-  anchor: HTMLElement | null;
-}
-
 export interface UIHandlers {
-  onFill(root: ParentNode): void;
+  onFill(): void;
   onConfirm(values: Record<string, string | null>, ctx: ReviewContext): void;
 }
+
+export interface UIOptions {
+  /** Localized label for the Fill button (e.g. "AutoFill" / "自動填寫"). */
+  fillLabel: string;
+}
+
+const POS_KEY = 'autofyFabPos';
 
 const STYLES = `
 :host { all: initial; }
 .fab {
-  position: fixed; z-index: 2147483646;
-  width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
-  background: #4f46e5; color: #fff; font: 600 13px/1 system-ui, sans-serif;
-  box-shadow: 0 6px 20px rgba(79,70,229,.45); transition: transform .15s;
+  position: fixed; right: 20px; bottom: 20px; z-index: 2147483646;
+  padding: 11px 20px; border-radius: 24px; border: none; cursor: grab;
+  background: #4f46e5; color: #fff; font: 600 14px/1 system-ui, sans-serif;
+  box-shadow: 0 6px 20px rgba(79,70,229,.45); white-space: nowrap;
+  touch-action: none; user-select: none;
 }
-.fab:hover { transform: scale(1.06); }
-.fab[disabled] { opacity: .6; cursor: default; }
+.fab:hover { filter: brightness(1.05); }
+.fab.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(79,70,229,.55); }
+.fab[disabled] { opacity: .7; cursor: default; }
 .panel {
   position: fixed; right: 20px; bottom: 84px; z-index: 2147483647;
   width: 340px; max-height: 70vh; display: none; flex-direction: column;
@@ -40,8 +43,7 @@ const STYLES = `
   box-shadow: 0 12px 40px rgba(0,0,0,.25); font: 13px system-ui, sans-serif;
 }
 .panel.open { display: flex; }
-.head { padding: 12px 14px; background: #4f46e5; color: #fff; font-weight: 600;
-  display: flex; justify-content: space-between; align-items: center; }
+.head { padding: 12px 14px; background: #4f46e5; color: #fff; font-weight: 600; }
 .head .sub { font-weight: 400; opacity: .85; font-size: 11px; }
 .rows { overflow-y: auto; padding: 6px 0; }
 .row { padding: 7px 14px; border-bottom: 1px solid #f0f0f0; }
@@ -72,7 +74,6 @@ const HL_MANUAL = '2px dashed #f59e0b';
 export interface UIController {
   setBusy(busy: boolean): void;
   toast(message: string): void;
-  setTargets(targets: FillTarget[]): void;
   showReview(
     fields: FieldSchema[],
     results: FillResult[],
@@ -87,7 +88,7 @@ function labelFor(f: FieldSchema): string {
   return f.label || f.name || f.placeholder || f.id || f.ref;
 }
 
-export function mountUI(handlers: UIHandlers): UIController {
+export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
   const host = document.createElement('div');
   host.id = 'autofy-root';
   const shadow = host.attachShadow({ mode: 'open' });
@@ -95,54 +96,89 @@ export function mountUI(handlers: UIHandlers): UIController {
   style.textContent = STYLES;
   shadow.appendChild(style);
 
+  const fab = document.createElement('button');
+  fab.className = 'fab';
+  fab.textContent = opts.fillLabel;
+  fab.title = 'Autofy';
+
   const panel = document.createElement('div');
   panel.className = 'panel';
   const toastEl = document.createElement('div');
   toastEl.className = 'toast';
-  shadow.append(panel, toastEl);
+  shadow.append(fab, panel, toastEl);
   (document.documentElement || document.body).appendChild(host);
 
-  let buttons: { btn: HTMLButtonElement; anchor: HTMLElement | null }[] = [];
   let busy = false;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
-  let rafScheduled = false;
 
-  function place(item: { btn: HTMLButtonElement; anchor: HTMLElement | null }): void {
-    const { btn, anchor } = item;
-    btn.style.position = 'fixed';
-    if (!anchor) {
-      btn.style.right = '20px';
-      btn.style.bottom = '20px';
-      btn.style.left = 'auto';
-      btn.style.top = 'auto';
-      btn.style.display = 'block';
-      return;
-    }
-    const r = anchor.getBoundingClientRect();
-    const offscreen = r.bottom < 0 || r.top > window.innerHeight || r.width === 0;
-    btn.style.display = offscreen ? 'none' : 'block';
-    const left = Math.min(window.innerWidth - 64, Math.max(8, r.right - 64));
-    const top = Math.min(window.innerHeight - 60, Math.max(8, r.top + 8));
-    btn.style.left = `${Math.round(left)}px`;
-    btn.style.top = `${Math.round(top)}px`;
-    btn.style.right = 'auto';
-    btn.style.bottom = 'auto';
+  // ---- drag + position persistence ----
+  function applyPos(left: number, top: number) {
+    const w = fab.offsetWidth || 90;
+    const h = fab.offsetHeight || 40;
+    const x = Math.min(window.innerWidth - w - 4, Math.max(4, left));
+    const y = Math.min(window.innerHeight - h - 4, Math.max(4, top));
+    fab.style.left = `${x}px`;
+    fab.style.top = `${y}px`;
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
   }
-
-  function reposition(): void {
-    for (const item of buttons) place(item);
-  }
-
-  function scheduleReposition(): void {
-    if (rafScheduled) return;
-    rafScheduled = true;
-    requestAnimationFrame(() => {
-      rafScheduled = false;
-      reposition();
+  try {
+    chrome.storage?.local.get(POS_KEY).then((o) => {
+      const p = o?.[POS_KEY] as { left: number; top: number } | undefined;
+      if (p) applyPos(p.left, p.top);
     });
+  } catch {
+    /* storage unavailable on this page — keep default corner */
   }
-  window.addEventListener('scroll', scheduleReposition, { passive: true, capture: true });
-  window.addEventListener('resize', scheduleReposition, { passive: true });
+
+  let dragging = false;
+  let moved = false;
+  let startX = 0;
+  let startY = 0;
+  let originLeft = 0;
+  let originTop = 0;
+
+  fab.addEventListener('pointerdown', (e) => {
+    if (busy) return;
+    dragging = true;
+    moved = false;
+    const r = fab.getBoundingClientRect();
+    originLeft = r.left;
+    originTop = r.top;
+    startX = e.clientX;
+    startY = e.clientY;
+    fab.classList.add('dragging');
+    fab.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  fab.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+    applyPos(originLeft + dx, originTop + dy);
+  });
+  fab.addEventListener('pointerup', (e) => {
+    if (!dragging) return;
+    dragging = false;
+    fab.classList.remove('dragging');
+    try {
+      fab.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    if (moved) {
+      try {
+        chrome.storage?.local.set({
+          [POS_KEY]: { left: parseFloat(fab.style.left), top: parseFloat(fab.style.top) },
+        });
+      } catch {
+        /* ignore */
+      }
+    } else {
+      handlers.onFill();
+    }
+  });
 
   function clearHighlights(resolve: (ref: string) => Element | undefined, refs: string[]) {
     for (const ref of refs) {
@@ -154,30 +190,14 @@ export function mountUI(handlers: UIHandlers): UIController {
   const controller: UIController = {
     setBusy(b) {
       busy = b;
-      for (const { btn } of buttons) {
-        btn.disabled = b;
-        btn.textContent = b ? '…' : 'Fill';
-      }
+      fab.disabled = b;
+      fab.textContent = b ? '…' : opts.fillLabel;
     },
     toast(message) {
       toastEl.textContent = message;
       toastEl.classList.add('show');
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4500);
-    },
-    setTargets(targets) {
-      for (const { btn } of buttons) btn.remove();
-      buttons = targets.map((t) => {
-        const btn = document.createElement('button');
-        btn.className = 'fab';
-        btn.textContent = busy ? '…' : 'Fill';
-        btn.disabled = busy;
-        btn.title = 'Autofy — fill this form';
-        btn.addEventListener('click', () => handlers.onFill(t.root));
-        shadow.appendChild(btn);
-        return { btn, anchor: t.anchor };
-      });
-      reposition();
     },
     showReview(fields, results, map, ctx, resolve, fake = false) {
       const status = new Map(results.map((r) => [r.ref, r]));
@@ -242,14 +262,12 @@ export function mountUI(handlers: UIHandlers): UIController {
         panel.classList.remove('open');
         clearHighlights(resolve, refs);
       });
-
       confirm.addEventListener('click', () => {
         const values: Record<string, string | null> = {};
         for (const { field, input } of inputs) {
           const v = input.value;
           const el = resolve(field.ref);
           if (el && v !== '') fillElement(el, v);
-          // Don't learn captcha / do-not-fill fields.
           if (!field.noFill) values[field.signature] = v === '' ? null : v;
         }
         handlers.onConfirm(values, ctx);

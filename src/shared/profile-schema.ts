@@ -6,31 +6,32 @@ import type { Profile, ProfilePath } from './types';
 
 export interface FieldDef {
   path: ProfilePath;
-  label: string;
+  /** i18n key for the field label (see shared/i18n.ts). */
+  labelKey: string;
   placeholder?: string;
   type?: 'text' | 'email' | 'tel' | 'date' | 'textarea';
 }
 
 /** Scalar profile fields rendered as individual inputs in the options page. */
 export const SCALAR_FIELDS: FieldDef[] = [
-  { path: 'basics.fullName', label: 'Full name', placeholder: 'Wang Da-ming' },
-  { path: 'basics.firstName', label: 'First name' },
-  { path: 'basics.lastName', label: 'Last name' },
-  { path: 'basics.email', label: 'Email', type: 'email', placeholder: 'you@example.com' },
-  { path: 'basics.phone', label: 'Phone', type: 'tel' },
-  { path: 'address.line1', label: 'Address line 1' },
-  { path: 'address.line2', label: 'Address line 2' },
-  { path: 'address.city', label: 'City' },
-  { path: 'address.state', label: 'State / Province' },
-  { path: 'address.postalCode', label: 'Postal code' },
-  { path: 'address.country', label: 'Country' },
-  { path: 'job.availableFrom', label: 'Available from', type: 'date' },
-  { path: 'job.expectedSalary', label: 'Expected salary' },
-  { path: 'job.workAuthorization', label: 'Work authorization' },
-  { path: 'job.linkedin', label: 'LinkedIn URL' },
-  { path: 'job.website', label: 'Website' },
-  { path: 'job.portfolio', label: 'Portfolio URL' },
-  { path: 'job.summary', label: 'Summary / cover blurb', type: 'textarea' },
+  { path: 'basics.fullName', labelKey: 'pf_full_name', placeholder: 'Wang Da-ming' },
+  { path: 'basics.firstName', labelKey: 'pf_first_name' },
+  { path: 'basics.lastName', labelKey: 'pf_last_name' },
+  { path: 'basics.email', labelKey: 'pf_email', type: 'email', placeholder: 'you@example.com' },
+  { path: 'basics.phone', labelKey: 'pf_phone', type: 'tel' },
+  { path: 'address.line1', labelKey: 'pf_addr1' },
+  { path: 'address.line2', labelKey: 'pf_addr2' },
+  { path: 'address.city', labelKey: 'pf_city' },
+  { path: 'address.state', labelKey: 'pf_state' },
+  { path: 'address.postalCode', labelKey: 'pf_postal' },
+  { path: 'address.country', labelKey: 'pf_country' },
+  { path: 'job.availableFrom', labelKey: 'pf_available_from', type: 'date' },
+  { path: 'job.expectedSalary', labelKey: 'pf_expected_salary' },
+  { path: 'job.workAuthorization', labelKey: 'pf_work_auth' },
+  { path: 'job.linkedin', labelKey: 'pf_linkedin' },
+  { path: 'job.website', labelKey: 'pf_website' },
+  { path: 'job.portfolio', labelKey: 'pf_portfolio' },
+  { path: 'job.summary', labelKey: 'pf_summary', type: 'textarea' },
 ];
 
 /** Read a scalar value at a dotted path. Returns undefined if absent or if the
