@@ -52,6 +52,17 @@ const STYLES = `
 }
 .fab.floating.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(79,70,229,.55); }
 .fab.inline { box-shadow: 0 2px 8px rgba(79,70,229,.35); vertical-align: middle; }
+.fab.loading { animation: autofy-pulse 1.4s ease-in-out infinite; }
+.fab .spinner {
+  display: inline-block; width: 15px; height: 15px; vertical-align: -2px;
+  border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+  border-radius: 50%; animation: autofy-spin .7s linear infinite;
+}
+@keyframes autofy-spin { to { transform: rotate(360deg); } }
+@keyframes autofy-pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(79,70,229,.4); }
+  50% { box-shadow: 0 4px 20px rgba(79,70,229,.8); }
+}
 .panel {
   position: fixed; right: 20px; bottom: 84px; z-index: 2147483647;
   width: 340px; max-height: 70vh; display: none; flex-direction: column;
@@ -157,11 +168,19 @@ export function mountUI(handlers: UIHandlers, opts: UIOptions): UIController {
   }
 
   function setLabel(): void {
-    const text = busy ? '…' : opts.fillLabel;
-    floatingFab.textContent = text;
-    inlineFab.textContent = text;
-    floatingFab.disabled = busy;
-    inlineFab.disabled = busy;
+    for (const btn of [floatingFab, inlineFab]) {
+      btn.disabled = busy;
+      btn.classList.toggle('loading', busy);
+      btn.setAttribute('aria-busy', String(busy));
+      if (busy) {
+        // Freeze the width so swapping the label for the spinner doesn't jump.
+        if (!btn.style.minWidth && btn.offsetWidth) btn.style.minWidth = `${btn.offsetWidth}px`;
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>';
+      } else {
+        btn.style.minWidth = '';
+        btn.textContent = opts.fillLabel;
+      }
+    }
   }
 
   // ---- floating placement + drag ----
